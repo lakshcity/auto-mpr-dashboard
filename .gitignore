@@ -1,0 +1,28 @@
+# Visual Studio
+.vs/
+
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+.env/
+
+# Streamlit
+.streamlit/
+
+# Logs
+logs/
+*.log
+
+# Data artifacts (large / generated)
+data/*.faiss
+data/*.pkl
+
+# OS
+.DS_Store
+Thumbs.db
