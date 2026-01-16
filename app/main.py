@@ -8,7 +8,12 @@ ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
-from services.user_insights import get_user_or_case_insights
+from services.user_insights import (
+    get_user_or_case_insights,
+    get_pending_cases,
+    get_overdue_cases,
+    get_critical_cases
+)
 
 # =========================
 # Imports
@@ -16,7 +21,6 @@ from services.user_insights import get_user_or_case_insights
 import streamlit as st
 import pickle
 import faiss
-
 from sentence_transformers import SentenceTransformer
 from services.retriever import find_similar_cases
 
@@ -40,28 +44,24 @@ st.caption(
 # =========================
 st.subheader("🔧 Control Panel")
 
-with st.container():
-    col1, col2 = st.columns(2)
+col1, col2 = st.columns(2)
 
-    with col1:
-        scale = st.selectbox(
-            "Data scale",
-            options=["2k", "25k"],
-            index=1
-        )
+with col1:
+    scale = st.selectbox(
+        "Data scale",
+        options=["2k", "25k"],
+        index=1
+    )
 
-    with col2:
-        query_mode = st.radio(
-            "Query type",
-            options=[
-                "General MPR Issue",
-                "User-Specific View"
-            ],
-            horizontal=True
-        )
+with col2:
+    query_mode = st.radio(
+        "Query type",
+        ["General MPR Issue", "User-Specific View"],
+        horizontal=True
+    )
 
 # =========================
-# Load heavy resources (scale-aware)
+# Load heavy resources
 # =========================
 @st.cache_resource
 def load_resources(scale):
@@ -71,16 +71,11 @@ def load_resources(scale):
         metadata = pickle.load(f)
     return model, index, metadata
 
-
 model, index, metadata = load_resources(scale)
 
 # =========================
 # User Input Section
 # =========================
-st.write(
-    "Enter a new MPR issue and get similar past cases with suggested resolutions."
-)
-
 if query_mode == "General MPR Issue":
     query = st.text_area(
         "Enter MPR Issue",
@@ -93,13 +88,19 @@ else:
         placeholder="e.g. john.doe"
     )
 
-# =========================
-# Run Button
-# =========================
 run_clicked = st.button("Run")
 
 # =========================
-# General MPR Query Logic
+# Session State Init
+# =========================
+if "user_summary" not in st.session_state:
+    st.session_state.user_summary = None
+
+if "active_owner" not in st.session_state:
+    st.session_state.active_owner = None
+
+# =========================
+# General MPR Flow
 # =========================
 if run_clicked and query_mode == "General MPR Issue":
     if not query.strip():
@@ -113,51 +114,19 @@ if run_clicked and query_mode == "General MPR Issue":
                 metadata=metadata
             )
 
-            results = sorted(
-                results,
-                key=lambda x: x.get("confidence", 0),
-                reverse=True
-            )
+        results = sorted(results, key=lambda x: x.get("confidence", 0), reverse=True)
 
         st.subheader("🔍 Similar Historical Cases")
-
-        IMPORTANT_FIELDS = [
-            "caseid",
-            "category",
-            "reportedon",
-            "subject",
-            "details",
-            "Resolution"
-        ]
 
         for i, r in enumerate(results, 1):
             confidence = round(r.get("confidence", 0), 2)
             label = "🟢 Best Match" if i == 1 else ""
 
-            with st.expander(
-                f"Case {i} {label} — Match Confidence: {confidence}%"
-            ):
-                for field in IMPORTANT_FIELDS:
-                    if field in r and r[field]:
-                        st.write(f"**{field}**: {r[field]}")
-
-        if results:
-            best_case = results[0]
-            st.subheader("✅ Recommended Resolution")
-            st.success(
-                "Based on the most similar historical MPR case:\n\n"
-                + best_case.get(
-                    "Resolution",
-                    "Refer to the top similar case above."
-                )
-            )
+            with st.expander(f"Case {i} {label} — Match Confidence: {confidence}%"):
+                st.json(r)
 
 # =========================
-# User-Specific Placeholder
-# =========================
-
-# =========================
-# User / Case Insights
+# User / Case Insights (LOAD ONCE)
 # =========================
 if run_clicked and query_mode == "User-Specific View":
     if not user_id.strip():
@@ -168,42 +137,72 @@ if run_clicked and query_mode == "User-Specific View":
         if insights["data"] is None:
             st.error("No data found for the given input.")
         else:
-            # -------------------------
-            # Case-level view
-            # -------------------------
             if insights["type"] == "case":
                 case = insights["data"]
 
                 st.subheader(f"📄 Case Details — {case['caseid']}")
+                st.json(case)
 
-                st.write(f"**Owner:** {case['currentowner']}")
-                st.write(f"**Category:** {case['category']}")
-                st.write(f"**Status:** {case['statuscode']}")
-                st.write(f"**Aging (days):** {case['aging']}")
-                st.write(f"**Reported On:** {case['reportedon']}")
-                st.write(f"**Closed Date:** {case['closedate']}")
+                st.session_state.user_summary = None
+                st.session_state.active_owner = None
 
-                st.markdown("**Subject**")
-                st.write(case["subject"])
-
-                st.markdown("**Details**")
-                st.write(case["details"])
-
-            # -------------------------
-            # User-level summary view
-            # -------------------------
             else:
                 summary = insights["data"]
+                st.session_state.user_summary = summary
+                st.session_state.active_owner = summary["owner"]
 
-                st.subheader(f"👤 User Summary — {summary['owner']}")
+# =========================
+# User Summary View (PERSISTENT)
+# =========================
+if st.session_state.user_summary is not None:
+    summary = st.session_state.user_summary
+    owner = st.session_state.active_owner
 
-                col1, col2, col3, col4 = st.columns(4)
+    st.subheader(f"👤 User Summary — {owner}")
 
-                col1.metric("Total Cases", summary["total_cases"])
-                col2.metric("Pending", summary["pending_cases"])
-                col3.metric("Overdue (>7d)", summary["overdue_cases"])
-                col4.metric("Critical (>21d)", summary["critical_cases"])
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Total Cases", summary["total_cases"])
+    c2.metric("Pending", summary["pending_cases"])
+    c3.metric("Overdue (>7d)", summary["overdue_cases"])
+    c4.metric("Critical (>21d)", summary["critical_cases"])
 
-                st.markdown("### Status Breakdown")
-                st.json(summary["status_breakdown"])
+    st.markdown("### Status Breakdown")
+    st.json(summary["status_breakdown"])
 
+    # =========================
+    # Focused Case View (FIXED)
+    # =========================
+    st.markdown("---")
+    st.subheader("📌 Focused Case View")
+
+    case_type = st.radio(
+        "Select case category",
+        ["Pending", "Overdue", "Critical"],
+        horizontal=True
+    )
+
+    if case_type == "Pending":
+        cases = get_pending_cases(owner)
+        badge = "🟡 Pending"
+        empty_msg = "No pending cases found for this user."
+    elif case_type == "Overdue":
+        cases = get_overdue_cases(owner)
+        badge = "🟠 Overdue"
+        empty_msg = "No overdue cases found for this user."
+    else:
+        cases = get_critical_cases(owner)
+        badge = "🔴 Critical"
+        empty_msg = "No critical cases found for this user."
+
+    if not cases:
+        st.info(empty_msg)
+    else:
+        for c in cases:
+            with st.expander(
+                f"{badge} | Case {c['caseid']} | Aging: {c['aging']} days"
+            ):
+                st.write(f"**Category:** {c['category']}")
+                st.write(f"**Status:** {c['statuscode']}")
+                st.write(f"**Reported On:** {c['reportedon']}")
+                st.write(f"**Subject:** {c.get('subject','')}")
+                st.write(f"**Details:** {c.get('details','')}")
