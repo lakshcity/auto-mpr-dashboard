@@ -84,8 +84,8 @@ if query_mode == "General MPR Issue":
     )
 else:
     user_id = st.text_input(
-        "Enter User ID or User Name",
-        placeholder="e.g. john.doe"
+        "Enter CaseID or User Name",
+        placeholder="e.g. Kumar Sanu"
     )
 
 run_clicked = st.button("Run")
@@ -100,7 +100,7 @@ if "active_owner" not in st.session_state:
     st.session_state.active_owner = None
 
 # =========================
-# General MPR Flow
+# General MPR Flow (FIXED DISPLAY)
 # =========================
 if run_clicked and query_mode == "General MPR Issue":
     if not query.strip():
@@ -118,12 +118,30 @@ if run_clicked and query_mode == "General MPR Issue":
 
         st.subheader("🔍 Similar Historical Cases")
 
+        IMPORTANT_FIELDS = [
+            "caseid",
+            "category",
+            "statuscode",
+            "currentowner",
+            "reportedon",
+            "aging",
+            "subject",
+            "details",
+            "Resolution"
+        ]
+
         for i, r in enumerate(results, 1):
             confidence = round(r.get("confidence", 0), 2)
             label = "🟢 Best Match" if i == 1 else ""
 
             with st.expander(f"Case {i} {label} — Match Confidence: {confidence}%"):
-                st.json(r)
+                
+                # 🔹 Show important fields only
+                for field in IMPORTANT_FIELDS:
+                    if field in r and r[field]:
+                        st.write(f"**{field}**: {r[field]}")
+
+                
 
 # =========================
 # User / Case Insights (LOAD ONCE)
@@ -170,7 +188,7 @@ if st.session_state.user_summary is not None:
     st.json(summary["status_breakdown"])
 
     # =========================
-    # Focused Case View (FIXED)
+    # Focused Case View
     # =========================
     st.markdown("---")
     st.subheader("📌 Focused Case View")
