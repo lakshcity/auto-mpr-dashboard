@@ -1,0 +1,91 @@
+/* ===== Global Page ===== */
+.main {
+    background-color: #f6f7fb;
+}
+
+/* Main content width (centered) */
+.block-container {
+    max-width: 1100px;
+    padding-top: 2rem;
+    padding-bottom: 3rem;
+    margin: auto;
+}
+
+/* Headings */
+h1 {
+    font-size: 2.1rem;
+    font-weight: 700;
+    color: #0b1f3a;
+    text-align: center;
+}
+
+h2, h3 {
+    color: #0b1f3a;
+    font-weight: 600;
+}
+
+/* Subtext */
+.stMarkdown p {
+    color: #4a5568;
+}
+
+/* ===== Cards ===== */
+.section-card {
+    background-color: #ffffff;
+    padding: 1.5rem;
+    border-radius: 14px;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+}
+
+/* ===== Metrics ===== */
+[data-testid="metric-container"] {
+    background-color: #ffffff;
+    border-radius: 14px;
+    padding: 1.2rem;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
+}
+
+/* ===== Sidebar ===== */
+section[data-testid="stSidebar"] {
+    background-color: #ffffff;
+    border-right: 1px solid #e6e9ef;
+}
+
+/* ===== Inputs ===== */
+input, textarea, select {
+    border-radius: 10px !important;
+    padding: 0.6rem !important;
+    border: 1px solid #d0d5dd !important;
+}
+
+/* Buttons */
+button[kind="primary"] {
+    background: linear-gradient(90deg, #7b2ff7, #f107a3);
+    color: white;
+    border-radius: 10px;
+    font-weight: 600;
+}
+
+/* ===== Remove Streamlit default separators ===== */
+hr {
+    display: none;
+}
+
+/* Center and constrain form elements */
+.stTextInput, .stTextArea, .stSelectbox {
+    max-width: 600px;
+    margin: auto;
+}
+
+/* Run button centered */
+.stButton {
+    display: flex;
+    justify-content: center;
+}
+
+/* Hide Control Panel heading only (logic intact) */
+.control-panel-hidden h3 {
+    display: none;
+}
+
