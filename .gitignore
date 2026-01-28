@@ -26,3 +26,15 @@ data/*.pkl
 # OS
 .DS_Store
 Thumbs.db
+
+# Data outputs
+backend_api/data/*.csv
+
+# Reference / scratch files
+needed query.sql
+project_structure.txt
+backend_api/scripts/reference/
+
+# Local API experiments
+backend_api/app/API.py
+
