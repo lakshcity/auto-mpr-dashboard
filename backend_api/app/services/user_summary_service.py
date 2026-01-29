@@ -1,16 +1,22 @@
-import pandas as pd
+﻿import pandas as pd
 
 
 class UserSummaryService:
-    # Logical mappings for CSV schema
-    USER_COLUMN = "currentowner"
-    STATUS_COLUMN = "statuscode"
-    AGING_COLUMN = "aging"
+    """
+    Computes user-level summaries and case drilldowns
+    from the master cases CSV.
+    """
+
+    # 🔁 Column mappings aligned to NEW schema
+    USER_COLUMN = "ownername"
+    STATUS_COLUMN = "Statuscode"
+    AGING_COLUMN = "ageing"
+    CATEGORY_COLUMN = "category"
 
     def __init__(self, csv_path: str):
         self.csv_path = csv_path
 
-    def _load_csv(self):
+    def _load_csv(self) -> pd.DataFrame:
         """
         Loads the CSV file using multiple encoding fallbacks.
         """
@@ -30,7 +36,7 @@ class UserSummaryService:
         """
         df = self._load_csv()
 
-        # Normalize user column + input username
+        # Normalize owner column + input username
         df[self.USER_COLUMN] = df[self.USER_COLUMN].astype(str).str.lower()
         username = username.lower()
 
@@ -52,7 +58,7 @@ class UserSummaryService:
                 "status_breakdown": {}
             }
 
-        # Normalize aging safely
+        # Normalize ageing safely
         user_df[self.AGING_COLUMN] = (
             pd.to_numeric(user_df[self.AGING_COLUMN], errors="coerce")
             .fillna(0)
@@ -65,15 +71,14 @@ class UserSummaryService:
 
         total_cases = len(user_df)
 
-        # Define closed statuses (same as Streamlit logic)
+        # Closed statuses (same logic as earlier)
         CLOSED_STATUSES = {"resolved", "invalid", "closed"}
-        
+
         open_df = user_df[~user_df[self.STATUS_COLUMN].isin(CLOSED_STATUSES)]
 
         pending = len(open_df)
         overdue = len(open_df[open_df[self.AGING_COLUMN] > 7])
         critical = len(open_df[open_df[self.AGING_COLUMN] > 21])
-
 
         status_breakdown = (
             user_df[self.STATUS_COLUMN]
@@ -89,7 +94,7 @@ class UserSummaryService:
             "critical": critical,
             "status_breakdown": status_breakdown
         }
-    
+
     def get_user_cases(self, username: str, case_type: str):
         """
         Returns case-level data for a user based on case type.
@@ -105,6 +110,7 @@ class UserSummaryService:
             pd.to_numeric(user_df[self.AGING_COLUMN], errors="coerce")
             .fillna(0)
         )
+
         user_df[self.STATUS_COLUMN] = (
             user_df[self.STATUS_COLUMN].astype(str).str.lower()
         )
@@ -122,8 +128,12 @@ class UserSummaryService:
         else:
             filtered = user_df
 
-
         # Return minimal case fields (UI-friendly)
         return filtered[
-            ["caseid", self.STATUS_COLUMN, self.AGING_COLUMN, "category"]
+            [
+                "caseid",
+                self.STATUS_COLUMN,
+                self.AGING_COLUMN,
+                self.CATEGORY_COLUMN
+            ]
         ].to_dict(orient="records")

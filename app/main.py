@@ -29,6 +29,9 @@ from sentence_transformers import SentenceTransformer
 from services.retriever import find_similar_cases
 import pandas as pd
 
+CSV_PATH = "backend_api/data/cases_master.csv"
+
+
 # =========================
 # Load CSS
 # =========================
@@ -259,6 +262,7 @@ if st.session_state.user_summary is not None:
     c2.metric("Pending", summary["pending_cases"])
     c3.metric("Overdue (>7d)", summary["overdue_cases"])
     c4.metric("Critical (>21d)", summary["critical_cases"])
+
 
     st.markdown("### Status Breakdown")
     st.json(summary["status_breakdown"])

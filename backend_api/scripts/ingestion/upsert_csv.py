@@ -1,84 +1,73 @@
-﻿import csv
-import os
-from typing import List, Dict
+﻿# upsert_csv.py
+# ==================================================
+# Snapshot → Master CSV Upsert Logic
+# ==================================================
+# - Schema driven (CSV_COLUMNS)
+# - Primary key: caseid
+# - Handles INSERT / UPDATE / UNCHANGED
+# ==================================================
 
-from .schema import CSV_COLUMNS, API_TO_CSV_FIELD_MAP
-
-
-PRIMARY_KEY = "caseid"
-
-
-def normalize_value(value):
-    """Normalize values for CSV comparison."""
-    if value is None:
-        return ""
-    return str(value).strip()
+import csv
+from pathlib import Path
+from .schema import CSV_COLUMNS, PRIMARY_KEY
 
 
-def map_api_record_to_csv(api_record: Dict) -> Dict:
-    """
-    Convert a raw API record into a CSV-aligned dict
-    using the canonical schema.
-    """
-    csv_row = {}
+def upsert_cases_to_csv(snapshot_csv: str, master_csv: str):
+    snapshot_csv = Path(snapshot_csv)
+    master_csv = Path(master_csv)
 
-    for api_field, csv_field in API_TO_CSV_FIELD_MAP.items():
-        csv_row[csv_field] = normalize_value(api_record.get(api_field))
+    # -------------------------------
+    # Load snapshot data
+    # -------------------------------
+    snapshot_rows = {}
+    with open(snapshot_csv, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            snapshot_rows[row[PRIMARY_KEY]] = row
 
-    return csv_row
-
-
-def upsert_cases_to_csv(
-    api_records: List[Dict],
-    csv_path: str
-) -> Dict[str, int]:
-    """
-    Upsert API records into CSV.
-
-    Returns stats:
-    {
-        "inserted": int,
-        "updated": int,
-        "unchanged": int
-    }
-    """
-
-    existing_rows = {}
-    stats = {"inserted": 0, "updated": 0, "unchanged": 0}
-
-    # 🔹 Load existing CSV (if present)
-    if os.path.exists(csv_path):
-        with open(csv_path, newline="", encoding="utf-8") as f:
+    # -------------------------------
+    # Load existing master (if exists)
+    # -------------------------------
+    master_rows = {}
+    if master_csv.exists():
+        with open(master_csv, newline="", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
-                existing_rows[row[PRIMARY_KEY]] = row
+                master_rows[row[PRIMARY_KEY]] = row
 
-    # 🔹 Process incoming API records
-    for record in api_records:
-        csv_row = map_api_record_to_csv(record)
-        case_id = csv_row[PRIMARY_KEY]
+    inserted = 0
+    updated = 0
+    unchanged = 0
 
-        if case_id not in existing_rows:
-            existing_rows[case_id] = csv_row
-            stats["inserted"] += 1
+    # -------------------------------
+    # Upsert logic
+    # -------------------------------
+    for caseid, snapshot_row in snapshot_rows.items():
+        if caseid not in master_rows:
+            master_rows[caseid] = snapshot_row
+            inserted += 1
         else:
-            existing_row = existing_rows[case_id]
-
-            if existing_row != csv_row:
-                existing_rows[case_id] = csv_row
-                stats["updated"] += 1
+            if master_rows[caseid] != snapshot_row:
+                master_rows[caseid] = snapshot_row
+                updated += 1
             else:
-                stats["unchanged"] += 1
+                unchanged += 1
 
-    # 🔹 Write CSV atomically
-    os.makedirs(os.path.dirname(csv_path), exist_ok=True)
-    temp_path = csv_path + ".tmp"
-
-    with open(temp_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=CSV_COLUMNS)
+    # -------------------------------
+    # Write updated master CSV
+    # -------------------------------
+    with open(master_csv, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=CSV_COLUMNS,
+            extrasaction="ignore"
+        )
         writer.writeheader()
-        writer.writerows(existing_rows.values())
+        writer.writerows(master_rows.values())
 
-    os.replace(temp_path, csv_path)
-
-    return stats
+    return {
+        "inserted": inserted,
+        "updated": updated,
+        "unchanged": unchanged,
+        "total_master_rows": len(master_rows)
+    }
