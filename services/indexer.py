@@ -12,18 +12,11 @@ import faiss
 # =============================
 BASE_DIR = Path(__file__).resolve().parents[1]
 
-# Scale can be: "2k" or "25k"
-SCALE = sys.argv[1] if len(sys.argv) > 1 else "2k"
+SCALE = "master"  # FORCE master
 
-DATA_MAP = {
-    "2k": "cases_training.csv",
-    "25k": "cases_training_25k.csv"
-}
-
-DATA_PATH = BASE_DIR / "data" / DATA_MAP[SCALE]
-INDEX_PATH = BASE_DIR / "data" / f"case_index_{SCALE}.faiss"
-META_PATH = BASE_DIR / "data" / f"case_meta_{SCALE}.pkl"
-
+DATA_PATH = BASE_DIR / "backend_api" / "data" / "cases_master.csv"
+INDEX_PATH = BASE_DIR / "data" / "case_index_master.faiss"
+META_PATH = BASE_DIR / "data" / "case_meta_master.pkl"
 # =============================
 # Robust CSV Loader
 # =============================
