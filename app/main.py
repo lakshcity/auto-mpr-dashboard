@@ -297,40 +297,37 @@ if st.session_state.user_summary is not None:
     with chart_col1:
         st.markdown("#### Status Breakdown")
 
-        from services.user_insights import _get_active_user_cases
-        active_cases_df = _get_active_user_cases(owner)
+        # ---- STEP 1: Try STATUS-based pie (from summary) ----
+        status_df = pd.DataFrame(
+            list(summary["status_breakdown"].items()),
+            columns=["Label", "Count"]
+        )
 
-        if active_cases_df.empty:
+        # Remove Unknown
+        status_df_clean = status_df[status_df["Label"] != "Unknown"]
+
+        # ---- STEP 2: Decide which pie to show ----
+        if not status_df_clean.empty:
+            pie_df = status_df_clean
+            legend_title = "Status"
+        else:
+            # 🔁 FALLBACK: Use Aging Buckets
+            pie_df = pd.DataFrame({
+                "Label": ["Fresh (<7d)", "Overdue (8-21d)", "Critical (>21d)"],
+                "Count": [
+                    summary["pending_cases"],
+                    summary["overdue_cases"],
+                    summary["critical_cases"]
+                ]
+            })
+            legend_title = "Aging"
+
+        # Remove zero values (important)
+        pie_df = pie_df[pie_df["Count"] > 0]
+
+        if pie_df.empty:
             st.info("No active cases available.")
         else:
-            # ---- STEP 1: Try STATUS-based pie ----
-            status_df = (
-                active_cases_df["statuscode"]
-                .value_counts()
-                .reset_index()
-            )
-            status_df.columns = ["Label", "Count"]
-
-            # Remove Unknown
-            status_df_clean = status_df[status_df["Label"] != "Unknown"]
-
-            # ---- STEP 2: Decide which pie to show ----
-            if not status_df_clean.empty:
-                pie_df = status_df_clean
-                legend_title = "Status"
-            else:
-                # 🔁 FALLBACK: Use Aging Buckets
-                pie_df = pd.DataFrame({
-                    "Label": ["Fresh (<7d)", "Overdue (8-21d)", "Critical (>21d)"],
-                    "Count": [
-                        summary["pending_cases"],
-                        summary["overdue_cases"],
-                        summary["critical_cases"]
-                    ]
-                })
-                legend_title = "Aging"
-
-            # ---- STEP 3: Draw Pie ----
             fig1, ax1 = plt.subplots(figsize=(4, 3))
 
             wedges, texts, autotexts = ax1.pie(
@@ -353,6 +350,7 @@ if st.session_state.user_summary is not None:
             fig1.patch.set_alpha(0)
 
             st.pyplot(fig1)
+
 
 
 
