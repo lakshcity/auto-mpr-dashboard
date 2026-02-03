@@ -1,5 +1,6 @@
 ﻿import pandas as pd
 from pathlib import Path
+import os
 
 # -----------------------------
 # Configuration: Business Logic
@@ -24,22 +25,42 @@ def _to_int(val):
 # Load data ONCE (cached)
 # -----------------------------
 BASE_DIR = Path(__file__).resolve().parents[1]
-# FIX 1: Point to the new Master file
-DATA_PATH = BASE_DIR / "app" / "data" / "cases_master.csv"
+
+# --- DEPLOYMENT FIX: Smart Path Finding ---
+# We try multiple locations to find the CSV file
+POSSIBLE_PATHS = [
+    BASE_DIR / "backend_api" / "data" / "cases_master.csv", # Your Local Path
+    BASE_DIR / "data" / "cases_master.csv",                 # Standard Repo Path
+    BASE_DIR / "app" / "data" / "cases_master.csv",         # Streamlit Cloud Path
+    BASE_DIR / "cases_master.csv"                           # Root Path
+]
 
 _df = None
+
+def get_actual_data_path():
+    """Loops through possible paths and returns the one that exists."""
+    for path in POSSIBLE_PATHS:
+        if path.exists():
+            print(f"[user_insights] Found data at: {path}")
+            return path
+    # If we reach here, no file was found
+    raise FileNotFoundError(
+        f"Could not find 'cases_master.csv'. Checked these locations: {[str(p) for p in POSSIBLE_PATHS]}"
+    )
 
 def load_cases_df():
     global _df
     if _df is not None:
         return _df
 
-    encodings = ["utf-8", "utf-8-sig", "cp1252", "latin1"]
-    last_err = None
+    # 1. Find the correct path dynamically
+    real_data_path = get_actual_data_path()
 
+    encodings = ["utf-8", "utf-8-sig", "cp1252", "latin1"]
+    
     for enc in encodings:
         try:
-            temp_df = pd.read_csv(DATA_PATH, encoding=enc)
+            temp_df = pd.read_csv(real_data_path, encoding=enc)
             
             # FIX 2: Standardize Column Names (New Data -> Old Logic)
             column_mapping = {
@@ -64,11 +85,10 @@ def load_cases_df():
             print(f"[user_insights] Columns found: {_df.columns.tolist()}")
             return _df
         except Exception as e:
-            last_err = e
             continue
 
     raise RuntimeError(
-        f"Failed to load CSV with known encodings. Last error: {last_err}"
+        f"Failed to load CSV from {real_data_path} with known encodings."
     )
 
 # -----------------------------
