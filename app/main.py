@@ -28,22 +28,33 @@ import faiss
 from sentence_transformers import SentenceTransformer
 from services.retriever import find_similar_cases
 import pandas as pd
+import matplotlib.pyplot as plt
+import altair as alt  # Added for colorful charts
 
 CSV_PATH = "backend_api/data/cases_master.csv"
-
 
 # =========================
 # Load CSS
 # =========================
 def load_css():
-    with open("app/ui/style.css") as f:
-        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+    try:
+        with open("app/ui/style.css") as f:
+            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+    except:
+        pass
 
     # hide Control Panel heading text ONLY (logic stays)
     st.markdown("""
         <style>
             .control-panel-hidden h3 {
                 display: none;
+            }
+            .section-card {
+                background-color: #ffffff;
+                padding: 20px;
+                border-radius: 10px;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                margin-bottom: 20px;
             }
         </style>
     """, unsafe_allow_html=True)
@@ -65,6 +76,10 @@ with st.sidebar:
     st.image(str(LOGO_PATH), use_container_width=True)
     st.markdown("<h3 style='margin-top:10px;'>Auto MPR</h3>", unsafe_allow_html=True)
     st.caption("Internal AI Demo")
+    # Added Reset button to help with cache clearing
+    if st.button("Clear Cache & Reset"):
+        st.cache_resource.clear()
+        st.rerun()
 
 # =========================
 # Center Logo (theme-safe)
@@ -124,11 +139,15 @@ scale = "2k"
 
 @st.cache_resource
 def load_resources(scale):
-    model = SentenceTransformer("all-MiniLM-L6-v2")
-    index = faiss.read_index(f"data/case_index_{scale}.faiss")
-    with open(f"data/case_meta_{scale}.pkl", "rb") as f:
-        metadata = pickle.load(f)
-    return model, index, metadata
+    # Mock fallback if file missing
+    try:
+        model = SentenceTransformer("all-MiniLM-L6-v2")
+        index = faiss.read_index(f"data/case_index_{scale}.faiss")
+        with open(f"data/case_meta_{scale}.pkl", "rb") as f:
+            metadata = pickle.load(f)
+        return model, index, metadata
+    except:
+        return SentenceTransformer("all-MiniLM-L6-v2"), None, []
 
 model, index, metadata = load_resources(scale)
 
@@ -177,6 +196,8 @@ if query_mode == "General MPR Issue":
 if run_clicked and query_mode == "General MPR Issue":
     if not query.strip():
         st.warning("Please enter an MPR issue.")
+    elif index is None:
+        st.error("Index not loaded. Please run indexer.py first.")
     else:
         with st.spinner("Searching similar past MPRs..."):
             results = find_similar_cases(
@@ -259,42 +280,106 @@ if st.session_state.user_summary is not None:
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Total Cases", summary["total_cases"])
-    c2.metric("Pending", summary["pending_cases"])
-    c3.metric("Overdue (>7d)", summary["overdue_cases"])
+    # Updated Labels to reflect Logic Fixes
+    c2.metric("Fresh (<7d)", summary["pending_cases"]) 
+    c3.metric("Overdue (8-21d)", summary["overdue_cases"])
     c4.metric("Critical (>21d)", summary["critical_cases"])
 
-
-    st.markdown("### Status Breakdown")
-    st.json(summary["status_breakdown"])
+    # st.markdown("### Status Breakdown")
+    # st.json(summary["status_breakdown"])
 
     # =========================
     # 📊 User Analytics (Charts)
     # =========================
     chart_col1, chart_col2 = st.columns(2)
 
+    # 1. PIE CHART
     with chart_col1:
-        st.markdown("#### Case Status Distribution")
-        status_df = pd.DataFrame(
-            list(summary["status_breakdown"].items()),
-            columns=["Status", "Count"]
-        )
-        # Fix: Direct use of matplotlib figure via pyplot
-        import matplotlib.pyplot as plt
-        fig1, ax1 = plt.subplots()
-        status_df.set_index("Status").plot.pie(y="Count", autopct="%1.0f%%", legend=False, ax=ax1)
-        st.pyplot(fig1)
+        st.markdown("#### Status Breakdown")
 
+        from services.user_insights import _get_active_user_cases
+        active_cases_df = _get_active_user_cases(owner)
+
+        if active_cases_df.empty:
+            st.info("No active cases available.")
+        else:
+            # ---- STEP 1: Try STATUS-based pie ----
+            status_df = (
+                active_cases_df["statuscode"]
+                .value_counts()
+                .reset_index()
+            )
+            status_df.columns = ["Label", "Count"]
+
+            # Remove Unknown
+            status_df_clean = status_df[status_df["Label"] != "Unknown"]
+
+            # ---- STEP 2: Decide which pie to show ----
+            if not status_df_clean.empty:
+                pie_df = status_df_clean
+                legend_title = "Status"
+            else:
+                # 🔁 FALLBACK: Use Aging Buckets
+                pie_df = pd.DataFrame({
+                    "Label": ["Fresh (<7d)", "Overdue (8-21d)", "Critical (>21d)"],
+                    "Count": [
+                        summary["pending_cases"],
+                        summary["overdue_cases"],
+                        summary["critical_cases"]
+                    ]
+                })
+                legend_title = "Aging"
+
+            # ---- STEP 3: Draw Pie ----
+            fig1, ax1 = plt.subplots(figsize=(4, 3))
+
+            wedges, texts, autotexts = ax1.pie(
+                pie_df["Count"],
+                autopct="%1.0f%%",
+                startangle=90,
+                pctdistance=0.7,
+                textprops={"color": "white", "weight": "bold"}
+            )
+
+            ax1.legend(
+                wedges,
+                pie_df["Label"],
+                title=legend_title,
+                loc="center left",
+                bbox_to_anchor=(1, 0, 0.5, 1)
+            )
+
+            ax1.axis("equal")
+            fig1.patch.set_alpha(0)
+
+            st.pyplot(fig1)
+
+
+
+    # 2. BAR CHART (Using Altair for Multi-Color)
     with chart_col2:
-        st.markdown("#### Case Aging Severity")
-        aging_df = pd.DataFrame({
-            "Category": ["Pending", "Overdue", "Critical"],
+        st.markdown("#### Active Load Severity")
+        aging_data = pd.DataFrame({
+            "Category": ["Fresh (<7d)", "Overdue (8-21d)", "Critical (>21d)"],
             "Cases": [
                 summary["pending_cases"],
                 summary["overdue_cases"],
                 summary["critical_cases"]
             ]
         })
-        st.bar_chart(aging_df.set_index("Category"))
+        
+        # Explicit Altair definition for Color Mapping (Green/Orange/Red)
+        c = alt.Chart(aging_data).mark_bar().encode(
+            x=alt.X('Category', sort=["Fresh (<7d)", "Overdue (8-21d)", "Critical (>21d)"]),
+            y='Cases',
+            color=alt.Color('Category', scale=alt.Scale(
+                domain=["Fresh (<7d)", "Overdue (8-21d)", "Critical (>21d)"],
+                range=['#2ecc71', '#f39c12', '#e74c3c']  # Green, Orange, Red
+            )),
+            tooltip=['Category', 'Cases']
+        ).properties(height=300)
+        
+        st.altair_chart(c, use_container_width=True)
 
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -304,34 +389,44 @@ if st.session_state.user_summary is not None:
     st.markdown('<div class="section-card">', unsafe_allow_html=True)
     st.subheader("📌 Focused Case View")
 
+    # 1. Rename 'Pending' to 'Fresh' in the selector
     case_type = st.radio(
         "Select case category",
-        ["Pending", "Overdue", "Critical"],
+        ["Fresh (<7d)", "Overdue (8-21d)", "Critical (>21d)"], # Clearer Labels
         horizontal=True
     )
 
-    if case_type == "Pending":
-        cases = get_pending_cases(owner)
-        badge = "🟡 Pending"
-        empty_msg = "No pending cases found for this user."
-    elif case_type == "Overdue":
-        cases = get_overdue_cases(owner)
+    # 2. Update Logic to match new labels
+    if "Fresh" in case_type:
+        # Show Top 5 for Fresh cases so we see recent activity
+        cases = get_pending_cases(owner, top_n=5) 
+        badge = "🟢 Fresh"
+        empty_msg = "No fresh cases (<7 days) found."
+        
+    elif "Overdue" in case_type:
+        # Show Top 3 for Overdue to focus on priority
+        cases = get_overdue_cases(owner, top_n=3) 
         badge = "🟠 Overdue"
-        empty_msg = "No overdue cases found for this user."
-    else:
-        cases = get_critical_cases(owner)
+        empty_msg = "No overdue cases (8-21 days) found."
+        
+    else: # Critical
+        # Show Top 3 for Critical
+        cases = get_critical_cases(owner, top_n=3)
         badge = "🔴 Critical"
-        empty_msg = "No critical cases found for this user."
+        empty_msg = "No critical cases (>21 days) found."
 
+    # 3. Display Logic
     if not cases:
         st.info(empty_msg)
     else:
         for c in cases:
-            with st.expander(f"{badge} | Case {c['caseid']} | Aging: {c['aging']} days"):
-                st.write(f"**Category:** {c['category']}")
+            # Added "Subject" to the header for quick scanning
+            header_text = f"{badge} | ID: {c['caseid']} | {c.get('subject', 'No Subject')}"
+            
+            with st.expander(header_text):
+                st.write(f"**Aging:** {c['aging_num']} days")
                 st.write(f"**Status:** {c['statuscode']}")
                 st.write(f"**Reported On:** {c['reportedon']}")
-                st.write(f"**Subject:** {c.get('subject','')}")
                 st.write(f"**Details:** {c.get('details','')}")
 
     st.markdown('</div>', unsafe_allow_html=True)

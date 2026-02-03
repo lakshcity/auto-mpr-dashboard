@@ -115,7 +115,6 @@ def build_index():
     print("\n✅ Index built successfully")
     print("Saved:", INDEX_PATH)
     print("Saved:", META_PATH)
-    print(f"\n⏱️ Index build time (25k records): {round(end_time - start_time, 2)} seconds")
 
 
 # =============================
