@@ -25,7 +25,7 @@ def _to_int(val):
 # -----------------------------
 BASE_DIR = Path(__file__).resolve().parents[1]
 # FIX 1: Point to the new Master file
-DATA_PATH = BASE_DIR / "backend_api" / "data" / "cases_master.csv"
+DATA_PATH = BASE_DIR / "app" / "data" / "cases_master.csv"
 
 _df = None
 
