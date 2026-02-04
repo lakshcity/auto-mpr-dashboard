@@ -10,7 +10,22 @@ if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
 BASE_DIR = Path(__file__).resolve().parent
-LOGO_PATH = BASE_DIR / "ui" / "assets" / "company_logo.png"
+
+# --- FIX: SMART LOGO FINDER ---
+def get_logo_path():
+    """Tries to find the logo in multiple locations to prevent crashes."""
+    candidates = [
+        BASE_DIR / "ui" / "assets" / "company_logo.png",   # Standard
+        BASE_DIR.parent / "assets" / "company_logo.png",   # Root assets
+        BASE_DIR / "assets" / "company_logo.png",          # Local assets
+        Path("assets/company_logo.png")                    # Current Working Dir
+    ]
+    for path in candidates:
+        if path.exists():
+            return str(path)
+    return None
+
+LOGO_PATH = get_logo_path()
 
 from services.user_insights import (
     get_user_or_case_insights,
@@ -29,21 +44,32 @@ from sentence_transformers import SentenceTransformer
 from services.retriever import find_similar_cases
 import pandas as pd
 import matplotlib.pyplot as plt
-import altair as alt  # Added for colorful charts
+import altair as alt
 
 CSV_PATH = "backend_api/data/cases_master.csv"
 
 # =========================
-# Load CSS
+# Streamlit UI Config
+# =========================
+st.set_page_config(
+    page_title="Auto MPR Recommendation",
+    layout="wide"
+)
+
+# =========================
+# Load CSS (Merged Styles)
 # =========================
 def load_css():
     try:
-        with open("app/ui/style.css") as f:
-            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+        # Try finding css relative to this file
+        css_path = BASE_DIR / "ui" / "style.css"
+        if css_path.exists():
+            with open(css_path) as f:
+                st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
     except:
         pass
 
-    # hide Control Panel heading text ONLY (logic stays)
+    # Merged CSS: Control Panel Hidden + Section Card + Recommendation Card
     st.markdown("""
         <style>
             .control-panel-hidden h3 {
@@ -56,323 +82,343 @@ def load_css():
                 box-shadow: 0 4px 6px rgba(0,0,0,0.1);
                 margin-bottom: 20px;
             }
+            /* PDF/Resolutioning Styles */
+            .recommendation-card {
+                background: #f1f8f4;
+                padding: 16px;
+                border-left: 5px solid #2e7d32;
+                border-radius: 8px;
+                margin-bottom: 20px;
+            }
+            .recommendation-title {
+                font-weight: 600;
+                font-size: 18px;
+                margin-bottom: 8px;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+            }
+            .recommendation-text {
+                font-size: 16px;
+                line-height: 1.5;
+                color: #1f1f1f;
+            }
         </style>
     """, unsafe_allow_html=True)
-
-# =========================
-# Streamlit UI Config
-# =========================
-st.set_page_config(
-    page_title="Auto MPR Recommendation",
-    layout="wide"
-)
 
 load_css()
 
 # =========================
-# Sidebar Branding (polished)
+# Helper: Build Recommendation
+# (Works for both CSV columns and PDF Chunks)
+# =========================
+def build_recommendation(results, top_n=3):
+    recommendations = []
+    
+    # Priority list of fields to look for solution text
+    POSSIBLE_TEXT_FIELDS = [
+        "Resolution", "resolution", "solution", "answer", # CSV fields
+        "page_content", "chunk", "content", "details"     # PDF/Chunk fields
+    ]
+
+    for r in results[:top_n]:
+        for field in POSSIBLE_TEXT_FIELDS:
+            # Check if field exists and has content
+            if r.get(field) and str(r[field]).strip():
+                clean_text = str(r[field]).strip()
+                # Avoid duplicates
+                if clean_text not in recommendations:
+                    recommendations.append(clean_text)
+                break # Found the best field for this result, move to next result
+
+    if not recommendations:
+        return "No clear resolution found in historical data."
+
+    # Format as bullet points
+    formatted_points = [f"• {rec}" for rec in recommendations]
+    return "\n".join(formatted_points)
+
+# =========================
+# Sidebar
 # =========================
 with st.sidebar:
-    st.image(str(LOGO_PATH), use_container_width=True)
+    if LOGO_PATH:
+        st.image(LOGO_PATH, use_container_width=True)
     st.markdown("<h3 style='margin-top:10px;'>Auto MPR</h3>", unsafe_allow_html=True)
     st.caption("Internal AI Demo")
-    # Added Reset button to help with cache clearing
     if st.button("Clear Cache & Reset"):
         st.cache_resource.clear()
         st.rerun()
 
 # =========================
-# Center Logo (theme-safe)
+# Header
 # =========================
 st.markdown("<div style='display:flex; justify-content:center; margin-top:16px;'>", unsafe_allow_html=True)
-st.image(str(LOGO_PATH), width=160)
+if LOGO_PATH:
+    st.image(LOGO_PATH, width=160)
 st.markdown("</div>", unsafe_allow_html=True)
 
-# =========================
-# Brand Strip (no text)
-# =========================
 st.markdown(
     """
-    <div style="
-        height:52px;
-        margin:18px auto 30px auto;
-        border-radius:14px;
-        max-width:1100px;
-        background: linear-gradient(90deg, #7b2ff7, #f107a3);
-    ">
-    </div>
+    <div style="height:5px; margin:18px auto 30px auto; border-radius:14px; max-width:1100px; background: linear-gradient(90deg, #7b2ff7, #f107a3);"></div>
     """,
     unsafe_allow_html=True
 )
 
-# =========================
-# Title
-# =========================
-st.markdown(
-    "<h1 style='text-align:center;'>Auto MPR Response Recommendation</h1>",
-    unsafe_allow_html=True
-)
-
-st.caption(
-    "Recommendations are generated by semantically matching new MPR issues "
-    "with historical cases using NLP-based similarity search."
-)
+st.markdown("<h1 style='text-align:center;'>Auto MPR Response Recommendation</h1>", unsafe_allow_html=True)
 
 # =========================
-# Query Mode Selector (CENTERED)
+# Query Mode
 # =========================
 st.markdown("<br>", unsafe_allow_html=True)
-
 c1, c2, c3 = st.columns([1, 2, 1])
 with c2:
-    query_mode = st.radio(
-        "",
-        ["General MPR Issue", "User-Specific View"],
-        horizontal=True
-    )
-
+    query_mode = st.radio("", ["General MPR Issue", "User-Specific View"], horizontal=True)
 
 # =========================
-# Load heavy resources
+# Load Resources
 # =========================
-scale = "2k"
+scale = "master"
 
-@st.cache_resource
+# Cache with TTL so index reloads periodically (e.g. every 30 minutes)
+@st.cache_resource(ttl="30m")
 def load_resources(scale):
-    # Mock fallback if file missing
     try:
+        # -------------------------
+        # PRIMARY: CSV / cases_master FAISS index
+        # -------------------------
         model = SentenceTransformer("all-MiniLM-L6-v2")
-        index = faiss.read_index(f"data/case_index_{scale}.faiss")
-        with open(f"data/case_meta_{scale}.pkl", "rb") as f:
+
+        index_candidates = [
+            BASE_DIR.parent / "data" / f"case_index_master.faiss",
+            BASE_DIR / "data" / f"case_index_master.faiss",
+            Path(f"data/case_index_master.faiss")
+        ]
+
+        index_path = None
+        for p in index_candidates:
+            if p.exists():
+                index_path = p
+                break
+
+        if not index_path:
+            raise FileNotFoundError("CSV FAISS index not found")
+
+        index = faiss.read_index(str(index_path))
+
+        meta_path = (
+            str(index_path)
+            .replace(".faiss", ".pkl")
+            .replace("case_index_", "case_meta_")
+        )
+
+        with open(meta_path, "rb") as f:
             metadata = pickle.load(f)
+
         return model, index, metadata
-    except:
-        return SentenceTransformer("all-MiniLM-L6-v2"), None, []
+
+    except Exception as e_csv:
+        # -------------------------
+        # FALLBACK: PDF FAISS index
+        # -------------------------
+        try:
+            index = faiss.read_index("data/pdf_index.faiss")
+            with open("data/pdf_meta.pkl", "rb") as f:
+                metadata = pickle.load(f)
+
+            return SentenceTransformer("all-MiniLM-L6-v2"), index, metadata
+
+        except Exception as e_pdf:
+            # Last-resort safe fallback (app should not crash)
+            st.error(
+                f"Error loading FAISS resources.\n"
+                f"CSV index error: {e_csv}\n"
+                f"PDF index error: {e_pdf}"
+            )
+            return SentenceTransformer("all-MiniLM-L6-v2"), None, []
+
+
 
 model, index, metadata = load_resources(scale)
 
 # =========================
-# User Input Section (centered)
+# Inputs
 # =========================
 st.markdown('<div class="section-card">', unsafe_allow_html=True)
-
 c1, c2, c3 = st.columns([1, 2, 1])
 with c2:
     if query_mode == "General MPR Issue":
-        query = st.text_area(
-            "Enter MPR Issue",
-            height=100,
-            placeholder="Describe the issue..."
-        )
+        query = st.text_area("Enter MPR Issue", height=100, placeholder="Describe the issue...")
     else:
-        user_id = st.text_input(
-            "Enter CaseID or User Name",
-            placeholder="e.g. Kumar Sanu"
-        )
-
+        user_id = st.text_input("Enter CaseID or User Name", placeholder="e.g. Kumar Sanu")
     run_clicked = st.button("Run", use_container_width=True)
-
 st.markdown('</div>', unsafe_allow_html=True)
 
 # =========================
-# Session State Init
+# State Management
 # =========================
 if "user_summary" not in st.session_state:
     st.session_state.user_summary = None
-
 if "active_owner" not in st.session_state:
     st.session_state.active_owner = None
 
-# =========================
-# UX FIX: Reset stale state when switching modes
-# =========================
-if query_mode == "General MPR Issue":
+# Reset state on mode switch
+if "last_query_mode" not in st.session_state:
+    st.session_state.last_query_mode = query_mode
+if st.session_state.last_query_mode != query_mode:
     st.session_state.user_summary = None
     st.session_state.active_owner = None
+    st.session_state.last_query_mode = query_mode
 
 # =========================
-# General MPR Flow
+# Logic: General Search (INTEGRATED PDF/CSV LOGIC)
 # =========================
 if run_clicked and query_mode == "General MPR Issue":
     if not query.strip():
         st.warning("Please enter an MPR issue.")
     elif index is None:
-        st.error("Index not loaded. Please run indexer.py first.")
+        st.error("Index not found. Please check data files.")
     else:
         with st.spinner("Searching similar past MPRs..."):
-            results = find_similar_cases(
-                query=query,
-                model=model,
-                index=index,
-                metadata=metadata
-            )
-
+            results = find_similar_cases(query, model, index, metadata)
+        
         results = sorted(results, key=lambda x: x.get("confidence", 0), reverse=True)
+        best_conf = round(results[0].get("confidence", 0), 2) if results else 0
 
+        # --- 1. RECOMMENDED RESOLUTION (Integrated Feature) ---
+        recommendation_text = build_recommendation(results)
+        
+        st.markdown(f"""
+            <div class="recommendation-card">
+                <div class="recommendation-title">
+                    <span>✅</span> Recommended Solution
+                    <span style="font-size:12px; color:#555; font-weight:normal; margin-left:10px;">
+                        (Confidence: {best_conf}%)
+                    </span>
+                </div>
+                <div class="recommendation-text">
+                    {recommendation_text}
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+
+        # --- 2. HISTORICAL CASES LIST ---
         st.markdown('<div class="section-card">', unsafe_allow_html=True)
         st.subheader("🔍 Similar Historical Cases")
-
-        IMPORTANT_FIELDS = [
-            "caseid", "category", "statuscode", "currentowner",
-            "reportedon", "aging", "subject", "details", "Resolution"
+        
+        # Fields to display in the expander (Handles both CSV and PDF fields)
+        DISPLAY_FIELDS = [
+            "caseid", "subject", "Resolution", "details", # CSV
+            "page_content", "source", "page"              # PDF
         ]
 
         for i, r in enumerate(results, 1):
-            confidence = round(r.get("confidence", 0), 2)
+            conf = round(r.get("confidence", 0), 2)
             label = "🟢 Best Match" if i == 1 else ""
-
-            with st.expander(f"Case {i} {label} — Match Confidence: {confidence}%"):
-                for field in IMPORTANT_FIELDS:
-                    if field in r and r[field]:
-                        st.write(f"**{field}**: {r[field]}")
-
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        # =========================
-        # 🧠 AI Recommended Resolution (DEMO)
-        # =========================
-        st.markdown('<div class="section-card">', unsafe_allow_html=True)
-        st.subheader("🧠 Recommended Resolution")
-        st.markdown("""
-        **Suggested Action:**
-        • Verify customer account details and recent activity  
-        • Reprocess the transaction after clearing validation errors  
-        • If issue persists, escalate to L2 Ops with case context  
-
-        _This recommendation is generated by analyzing similar historical MPR cases._
-        """)
+            
+            # Dynamic Header based on available data
+            header_subject = r.get('subject') or r.get('source') or "Unknown Subject"
+            header_id = r.get('caseid') or f"Doc-{i}"
+            
+            with st.expander(f"Case {i} {label} — {header_id} — {conf}%"):
+                for field in DISPLAY_FIELDS:
+                    if r.get(field):
+                        st.write(f"**{field.capitalize()}:** {r[field]}")
+                        
         st.markdown('</div>', unsafe_allow_html=True)
 
 # =========================
-# User / Case Insights
+# Logic: User View
 # =========================
 if run_clicked and query_mode == "User-Specific View":
     if not user_id.strip():
-        st.warning("Please enter a caseID or full name.")
+        st.warning("Please enter a Name.")
     else:
         insights = get_user_or_case_insights(user_id)
-
         if insights["data"] is None:
-            st.error("No data found for the given input.")
+            st.error("No data found.")
+        elif insights["type"] == "case":
+            st.json(insights["data"])
         else:
-            if insights["type"] == "case":
-                case = insights["data"]
-                st.markdown('<div class="section-card">', unsafe_allow_html=True)
-                st.subheader(f"📄 Case Details — {case['caseid']}")
-                st.json(case)
-                st.markdown('</div>', unsafe_allow_html=True)
-                
-                st.session_state.user_summary = None
-                st.session_state.active_owner = None
-            else:
-                st.session_state.user_summary = insights["data"]
-                st.session_state.active_owner = insights["data"]["owner"]
+            st.session_state.user_summary = insights["data"]
+            st.session_state.active_owner = insights["data"]["owner"]
 
 # =========================
-# User Summary View
+# Dashboard Display
 # =========================
-if st.session_state.user_summary is not None:
-    summary = st.session_state.user_summary
-    owner = st.session_state.active_owner
-
+if st.session_state.user_summary:
+    s = st.session_state.user_summary
+    
     st.markdown('<div class="section-card">', unsafe_allow_html=True)
-    st.subheader(f"👤 User Summary — {owner}")
-
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Total Cases", summary["total_cases"])
-    # Updated Labels to reflect Logic Fixes
-    c2.metric("Fresh (<7d)", summary["pending_cases"]) 
-    c3.metric("Overdue (8-21d)", summary["overdue_cases"])
-    c4.metric("Critical (>21d)", summary["critical_cases"])
-
-    # st.markdown("### Status Breakdown")
-    # st.json(summary["status_breakdown"])
-
-    # =========================
-    # 📊 User Analytics (Charts)
-    # =========================
+    st.subheader(f"👤 User Summary — {s['owner']}")
+    
+    # Metrics
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Total Cases", s["total_cases"])
+    m2.metric("Fresh (<7d)", s["pending_cases"])
+    m3.metric("Overdue (8-21d)", s["overdue_cases"])
+    m4.metric("Critical (>21d)", s["critical_cases"])
+    
+    st.markdown("---")
+    
+    # CHARTS
     chart_col1, chart_col2 = st.columns(2)
-
-    # 1. PIE CHART
+    
+    # 1. SMART PIE CHART (Status or Fallback)
     with chart_col1:
         st.markdown("#### Status Breakdown")
-
-        # ---- STEP 1: Try STATUS-based pie (from summary) ----
-        status_df = pd.DataFrame(
-            list(summary["status_breakdown"].items()),
-            columns=["Label", "Count"]
-        )
-
-        # Remove Unknown
+        
+        # Prepare Data: Try Status first
+        status_df = pd.DataFrame(list(s["status_breakdown"].items()), columns=["Label", "Count"])
+        # Filter out "Unknown" or trivial statuses if necessary
         status_df_clean = status_df[status_df["Label"] != "Unknown"]
 
-        # ---- STEP 2: Decide which pie to show ----
-        if not status_df_clean.empty:
+        # Decision: Use Status or Fallback to Aging?
+        if not status_df_clean.empty and status_df_clean["Count"].sum() > 0:
             pie_df = status_df_clean
             legend_title = "Status"
         else:
-            # 🔁 FALLBACK: Use Aging Buckets
+            # Fallback: Use Aging buckets so chart is never empty
             pie_df = pd.DataFrame({
                 "Label": ["Fresh (<7d)", "Overdue (8-21d)", "Critical (>21d)"],
-                "Count": [
-                    summary["pending_cases"],
-                    summary["overdue_cases"],
-                    summary["critical_cases"]
-                ]
+                "Count": [s["pending_cases"], s["overdue_cases"], s["critical_cases"]]
             })
             legend_title = "Aging"
 
-        # Remove zero values (important)
+        # Remove zero counts to avoid messy chart
         pie_df = pie_df[pie_df["Count"] > 0]
 
         if pie_df.empty:
-            st.info("No active cases available.")
+            st.info("No active cases available for charting.")
         else:
+            # Create Plot
             fig1, ax1 = plt.subplots(figsize=(4, 3))
-
             wedges, texts, autotexts = ax1.pie(
-                pie_df["Count"],
-                autopct="%1.0f%%",
+                pie_df["Count"], 
+                autopct='%1.0f%%', 
                 startangle=90,
-                pctdistance=0.7,
-                textprops={"color": "white", "weight": "bold"}
+                textprops={'color':"white", 'weight':'bold'}
             )
-
-            ax1.legend(
-                wedges,
-                pie_df["Label"],
-                title=legend_title,
-                loc="center left",
-                bbox_to_anchor=(1, 0, 0.5, 1)
-            )
-
-            ax1.axis("equal")
+            # Legend outside
+            ax1.legend(wedges, pie_df["Label"], title=legend_title, loc="center left", bbox_to_anchor=(1, 0, 0.5, 1))
+            ax1.axis('equal')
             fig1.patch.set_alpha(0)
+            st.pyplot(fig1, use_container_width=False)
 
-            st.pyplot(fig1)
-
-
-
-
-    # 2. BAR CHART (Using Altair for Multi-Color)
+    # 2. BAR CHART (Altair)
     with chart_col2:
         st.markdown("#### Active Load Severity")
         aging_data = pd.DataFrame({
             "Category": ["Fresh (<7d)", "Overdue (8-21d)", "Critical (>21d)"],
-            "Cases": [
-                summary["pending_cases"],
-                summary["overdue_cases"],
-                summary["critical_cases"]
-            ]
+            "Cases": [s["pending_cases"], s["overdue_cases"], s["critical_cases"]]
         })
         
-        # Explicit Altair definition for Color Mapping (Green/Orange/Red)
         c = alt.Chart(aging_data).mark_bar().encode(
             x=alt.X('Category', sort=["Fresh (<7d)", "Overdue (8-21d)", "Critical (>21d)"]),
             y='Cases',
             color=alt.Color('Category', scale=alt.Scale(
                 domain=["Fresh (<7d)", "Overdue (8-21d)", "Critical (>21d)"],
-                range=['#2ecc71', '#f39c12', '#e74c3c']  # Green, Orange, Red
+                range=['#2ecc71', '#f39c12', '#e74c3c']
             )),
             tooltip=['Category', 'Cases']
         ).properties(height=300)
@@ -380,40 +426,26 @@ if st.session_state.user_summary is not None:
         st.altair_chart(c, use_container_width=True)
 
     st.markdown('</div>', unsafe_allow_html=True)
-
-    # =========================
-    # Focused Case View
-    # =========================
+    
+    # Focused List
     st.markdown('<div class="section-card">', unsafe_allow_html=True)
     st.subheader("📌 Focused Case View")
-
-    # 1. Rename 'Pending' to 'Fresh' in the selector
-    case_type = st.radio(
-        "Select case category",
-        ["Fresh (<7d)", "Overdue (8-21d)", "Critical (>21d)"], # Clearer Labels
-        horizontal=True
-    )
-
-    # 2. Update Logic to match new labels
+    
+    case_type = st.radio("Select category", ["Fresh (<7d)", "Overdue (8-21d)", "Critical (>21d)"], horizontal=True)
+    
     if "Fresh" in case_type:
-        # Show Top 5 for Fresh cases so we see recent activity
-        cases = get_pending_cases(owner, top_n=5) 
+        cases = get_pending_cases(s["owner"], top_n=5)
         badge = "🟢 Fresh"
         empty_msg = "No fresh cases (<7 days) found."
-        
     elif "Overdue" in case_type:
-        # Show Top 3 for Overdue to focus on priority
-        cases = get_overdue_cases(owner, top_n=3) 
+        cases = get_overdue_cases(s["owner"], top_n=3)
         badge = "🟠 Overdue"
         empty_msg = "No overdue cases (8-21 days) found."
-        
-    else: # Critical
-        # Show Top 3 for Critical
-        cases = get_critical_cases(owner, top_n=3)
+    else:
+        cases = get_critical_cases(s["owner"], top_n=3)
         badge = "🔴 Critical"
         empty_msg = "No critical cases (>21 days) found."
-
-    # 3. Display Logic
+        
     if not cases:
         st.info(empty_msg)
     else:
