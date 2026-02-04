@@ -1,21 +1,25 @@
-# db_config.py
-# ============================
-# Database Configuration
-# ============================
-
+import os
 from datetime import date, timedelta
+from dotenv import load_dotenv
+
+# Load environment variables from the .env file
+load_dotenv()
 
 # Resolve DB dynamically (today - 1)
 YESTERDAY = date.today() - timedelta(days=1)
-DB_NAME = f"my_{YESTERDAY.strftime('%Y_%m_%d')}"
+# Use the prefix from .env or default to 'my_'
+prefix = os.getenv("DB_NAME_PREFIX", "my_")
+DB_NAME = f"{prefix}{YESTERDAY.strftime('%Y_%m_%d')}"
 
 DB_CONFIG = {
-    "host": "192.168.0.81",
-    "port": 5432,
+    "host": os.getenv("DB_HOST"),
+    "port": os.getenv("DB_PORT", 5432),
     "database": DB_NAME,
-    "user": "postgres",
-    "password": "abc123",
+    "user": os.getenv("DB_USER"),
+    "password": os.getenv("DB_PASS"),  # <--- Now hidden!
 }
+
+# ... (rest of your query code stays the same) ...
 
 # ============================
 # Canonical MPR + Case Query

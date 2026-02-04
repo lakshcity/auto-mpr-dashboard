@@ -10,7 +10,7 @@ __pycache__/
 
 # Virtual environment
 venv/
-.env/
+#.env/
 
 # Streamlit
 .streamlit/
@@ -20,8 +20,8 @@ logs/
 *.log
 
 # Data artifacts (large / generated)
-data/*.faiss
-data/*.pkl
+#data/*.faiss
+#data/*.pkl
 
 # OS
 .DS_Store
