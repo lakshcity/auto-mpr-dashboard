@@ -2,73 +2,78 @@
 import time
 import sys
 import os
-from pathlib import Path
+import subprocess  # <--- NEW: Allows running Git commands
 
-# ==========================================
-# FIX 1: Add Root Directory to Python Path
-# ==========================================
-# Get the absolute path of the folder this script is in
+# ... (Keep your existing path setup and imports) ...
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(current_dir)
-
-# ==========================================
-# FIX 2: Absolute Path for Log File
-# ==========================================
-# This forces the log file to be created RIGHT HERE, next to the script
 log_file_path = os.path.join(current_dir, "pipeline.log")
 
-# ==========================================
-# Imports
-# ==========================================
 from backend_api.scripts.ingestion import export_db_snapshot
 from backend_api.scripts.ingestion import run_upsert_snapshot
 
-# Try importing indexer from Root (Standard) or Services (Alternate)
 try:
     import indexer
 except ImportError:
     try:
-        # Fallback if you moved indexer.py to services/ folder
         from services import indexer
     except ImportError:
         print("❌ CRITICAL ERROR: Could not find 'indexer.py'.")
-        print("   Please ensure 'indexer.py' is in the SAME folder as this script.")
         sys.exit(1)
 
-# Setup Logging
-# We now use the absolute 'log_file_path' we defined above
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(log_file_path), # <--- FORCE PATH HERE
-        logging.StreamHandler()
-    ]
+    handlers=[logging.FileHandler(log_file_path), logging.StreamHandler()]
 )
 
+# ==========================================
+# NEW FUNCTION: Auto-Git Pusher
+# ==========================================
+def push_to_github():
+    try:
+        logging.info("4. Pushing updates to GitHub...")
+        print("🚀 Pushing new data to GitHub...")
+
+        # 1. Add changes
+        subprocess.run(["git", "add", "data/*.csv", "data/*.faiss", "data/*.pkl"], check=True)
+        
+        # 2. Commit (Ignore error if no changes exist)
+        subprocess.run(["git", "commit", "-m", "🤖 Auto-Update: Fresh Data & Index"], check=False)
+        
+        # 3. Push to master (Or your specific branch)
+        subprocess.run(["git", "push", "origin", "master"], check=True)
+        
+        logging.info("✅ Successfully pushed to GitHub")
+        return True
+    except subprocess.CalledProcessError as e:
+        logging.error(f"❌ Git Push Failed: {e}")
+        return False
+
 def run_full_pipeline():
-    print(f"📝 Logging to: {log_file_path}") # Tell user exactly where the log is
     logging.info("=== STARTING AUTOMATED PIPELINE ===")
     
     try:
-        # Step 1: Fetch from DB -> Create Daily Snapshot
+        # Step 1: Fetch
         logging.info("1. Fetching Data from DB...")
         export_db_snapshot.export_daily_snapshot()
         
-        # Step 2: Merge Snapshot -> Master CSV (Upsert)
+        # Step 2: Upsert
         logging.info("2. Merging Snapshot to Master CSV...")
         run_upsert_snapshot.run_snapshot_upsert()
         
-        # Step 3: Rebuild Vector Index
+        # Step 3: Index
         logging.info("3. Rebuilding FAISS Index...")
         indexer.build_index()
+
+        # Step 4: Git Push (The Magic Step)
+        push_to_github()  # <--- CALLING THE NEW FUNCTION
         
         logging.info("=== PIPELINE COMPLETED SUCCESSFULLY ===")
         return True
         
     except Exception as e:
         logging.error(f"!!! PIPELINE FAILED: {str(e)}")
-        # Print to console as well so you see it immediately
         print(f"❌ Pipeline Failed: {e}")
         return False
 

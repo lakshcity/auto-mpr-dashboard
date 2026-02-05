@@ -2,10 +2,32 @@
 from pathlib import Path
 import os
 
+# =========================
+# Hardcoded Owner Mapping
+# =========================
+OWNER_MAP = {
+    "aditya singh": 781,
+    "akarsh bhatt": 6039,
+    "amit anand": 827,
+    "anubhav gupta": 4310,
+    "deepali kumari": 5249,
+    "dheeraj": 4776,
+    "himanshu padaliya": 4019,
+    "laksh gupta": 6035,
+    "lisha gupta": 5443,
+    "niharika verma": 4185,
+    "sagar verma": 4777,
+    "testinguserkam@6": 5437,
+    "veeresh kumar verma": 5926,
+    "vikas ojha": 3898,
+    "vishal kumar": 5736,
+    "vivek kumar": 3701,
+    "yajurva tiwari": 3520
+}
+
 # -----------------------------
 # Configuration: Business Logic
 # -----------------------------
-# Statuses that mean the work is finished (Excluded from Aging counts)
 TERMINAL_STATUSES = ["Resolved", "Closed", "Invalid"]
 
 # -----------------------------
@@ -13,39 +35,61 @@ TERMINAL_STATUSES = ["Resolved", "Closed", "Invalid"]
 # -----------------------------
 def _to_int(val):
     try:
-        # Handle "3 D" or "3" or 3
         if isinstance(val, str):
             clean_val = val.lower().replace("d", "").strip()
-            return int(clean_val)
-        return int(val)
+            return int(float(clean_val))
+        return int(float(val))
     except Exception:
         return 0
+
+def _to_float(val):
+    try:
+        if isinstance(val, str):
+            clean_val = val.lower().replace("d", "").strip()
+            return float(clean_val)
+        return float(val)
+    except Exception:
+        return 0.0
+
+def _raw_age_to_days(raw_val):
+    """
+    Fallback converter for 'ageing' column when dates are missing.
+    NOTE: In your CSV, many ageing values behave like minutes (e.g. 18707),
+    so if the number is large, we treat it as minutes and convert to days.
+    """
+    x = _to_float(raw_val)
+    if x <= 0:
+        return 0.0
+
+    # Heuristic: huge values are almost always minutes in your dataset
+    # Example: 18707 minutes ~ 13 days (matches reportedon->closeddate range)
+    if x > 1000:
+        return x / 1440.0
+
+    # Otherwise treat as days
+    return x
 
 # -----------------------------
 # Load data ONCE (cached)
 # -----------------------------
 BASE_DIR = Path(__file__).resolve().parents[1]
 
-# --- DEPLOYMENT FIX: Smart Path Finding ---
-# We try multiple locations to find the CSV file
 POSSIBLE_PATHS = [
-    BASE_DIR / "backend_api" / "data" / "cases_master.csv", # Your Local Path
-    BASE_DIR / "data" / "cases_master.csv",                 # Standard Repo Path
-    BASE_DIR / "app" / "data" / "cases_master.csv",         # Streamlit Cloud Path
-    BASE_DIR / "cases_master.csv"                           # Root Path
+    BASE_DIR / "backend_api" / "data" / "cases_master.csv",
+    BASE_DIR / "data" / "cases_master.csv",
+    BASE_DIR / "app" / "data" / "cases_master.csv",
+    BASE_DIR / "cases_master.csv"
 ]
 
 _df = None
 
 def get_actual_data_path():
-    """Loops through possible paths and returns the one that exists."""
     for path in POSSIBLE_PATHS:
         if path.exists():
             print(f"[user_insights] Found data at: {path}")
             return path
-    # If we reach here, no file was found
     raise FileNotFoundError(
-        f"Could not find 'cases_master.csv'. Checked these locations: {[str(p) for p in POSSIBLE_PATHS]}"
+        f"Could not find 'cases_master.csv'. Checked: {[str(p) for p in POSSIBLE_PATHS]}"
     )
 
 def load_cases_df():
@@ -53,68 +97,119 @@ def load_cases_df():
     if _df is not None:
         return _df
 
-    # 1. Find the correct path dynamically
     real_data_path = get_actual_data_path()
-
     encodings = ["utf-8", "utf-8-sig", "cp1252", "latin1"]
-    
+
     for enc in encodings:
         try:
             temp_df = pd.read_csv(real_data_path, encoding=enc)
-            
-            # FIX 2: Standardize Column Names (New Data -> Old Logic)
+
             column_mapping = {
-                "ownername": "currentowner",  # Map new 'ownername' to expected 'currentowner'
-                "ageing": "aging",            # Map new 'ageing' to expected 'aging'
-                "Statuscode": "statuscode",   # Map new 'Statuscode' to lowercase
-                "MPR_Subject": "subject",     # Fallback if 'subject' is missing
+                "ownername": "currentowner",
+                "ageing": "ageing",        # keep original name
+                "Statuscode": "Statuscode", # keep raw column if present
+                "MPR_Subject": "subject",
             }
             temp_df.rename(columns=column_mapping, inplace=True)
-            
-            # FIX 3: Ensure critical columns exist
-            if "statuscode" not in temp_df.columns:
-                temp_df["statuscode"] = "Unknown"
-            else:
-                temp_df["statuscode"] = temp_df["statuscode"].fillna("Unknown")
 
-            # FIX 4: Create a clean numeric aging column for charts
-            temp_df["aging_num"] = temp_df["aging"].apply(_to_int)
+            # Ensure required columns exist
+            if "currentowner" not in temp_df.columns:
+                temp_df["currentowner"] = ""
+
+            if "reportedon" not in temp_df.columns:
+                temp_df["reportedon"] = ""
+
+            if "closeddate" not in temp_df.columns:
+                temp_df["closeddate"] = ""
+
+            if "ageing" not in temp_df.columns:
+                temp_df["ageing"] = 0
+
+            # -------------------------
+            # 1) Parse dates (CRUCIAL)
+            # -------------------------
+            temp_df["reportedon"] = pd.to_datetime(temp_df["reportedon"], errors="coerce")
+            temp_df["closeddate"] = pd.to_datetime(temp_df["closeddate"], errors="coerce")
+
+            # -------------------------
+            # 2) Fix / Infer statuscode
+            # -------------------------
+            # If Statuscode exists but empty, treat as Pending
+            if "statuscode" in temp_df.columns:
+                temp_df["statuscode"] = temp_df["statuscode"].fillna("").astype(str).str.strip()
+                temp_df.loc[temp_df["statuscode"] == "", "statuscode"] = "Pending"
+            elif "Statuscode" in temp_df.columns:
+                temp_df["statuscode"] = temp_df["Statuscode"].fillna("").astype(str).str.strip()
+                temp_df.loc[temp_df["statuscode"] == "", "statuscode"] = "Pending"
+            else:
+                temp_df["statuscode"] = "Pending"
+
+            # If closeddate exists => Resolved (strongest truth)
+            temp_df.loc[temp_df["closeddate"].notna(), "statuscode"] = "Resolved"
+
+            # -------------------------
+            # 3) Correct aging calculation in DAYS
+            # -------------------------
+            today = pd.Timestamp.now()
+
+            def calc_aging_days(row):
+                start = row["reportedon"]
+                if pd.isnull(start):
+                    return _raw_age_to_days(row.get("ageing", 0))
+
+                end = row["closeddate"] if pd.notnull(row["closeddate"]) else today
+                diff_days = (end - start).total_seconds() / 86400.0
+                if diff_days < 0:
+                    diff_days = 0.0
+                return diff_days
+
+            temp_df["aging_num"] = temp_df.apply(calc_aging_days, axis=1)
 
             _df = temp_df.fillna("")
-            print(f"[user_insights] Loaded Master CSV with encoding: {enc}")
-            print(f"[user_insights] Columns found: {_df.columns.tolist()}")
+            print(f"[user_insights] Loaded CSV with encoding: {enc}")
+            print(f"[user_insights] Columns: {_df.columns.tolist()}")
             return _df
-        except Exception as e:
+        except Exception:
             continue
 
-    raise RuntimeError(
-        f"Failed to load CSV from {real_data_path} with known encodings."
-    )
+    raise RuntimeError("Failed to load CSV with known encodings.")
 
 # -----------------------------
-# Utility: detect caseid vs username
+# Utility
 # -----------------------------
 def is_case_id(value: str) -> bool:
-    # Check if value is digits (Case ID) or String (User Name)
     return str(value).isdigit()
+
+# -----------------------------
+# OWNERID-AWARE FILTER (CORE FIX)
+# -----------------------------
+def _get_user_cases_by_owner(owner_name: str, df: pd.DataFrame):
+    owner_key = owner_name.strip().lower()
+    owner_id = OWNER_MAP.get(owner_key)
+
+    if owner_id and "currentownerid" in df.columns:
+        return df[df["currentownerid"] == owner_id]
+
+    return df[
+        df["currentowner"]
+        .astype(str)
+        .str.lower()
+        .str.strip()
+        .eq(owner_key)
+    ]
 
 # -----------------------------
 # Core Logic Helpers
 # -----------------------------
 def _get_user_cases(owner_name: str):
-    """Get ALL cases for a user (History + Active)"""
     df = load_cases_df()
-    # Case-insensitive match for owner name
-    mask = df["currentowner"].astype(str).str.lower() == owner_name.lower().strip()
-    return df[mask].copy()
+    return _get_user_cases_by_owner(owner_name, df).copy()
 
 def _get_active_user_cases(owner_name: str):
-    """Get ONLY Active cases (removing Resolved/Closed)"""
     user_df = _get_user_cases(owner_name)
     if user_df.empty:
         return pd.DataFrame()
-    
-    # Filter out Terminal Statuses
+
     mask = ~user_df["statuscode"].astype(str).str.strip().isin(TERMINAL_STATUSES)
     return user_df[mask].copy()
 
@@ -125,54 +220,39 @@ def get_user_or_case_insights(query_val: str):
     df = load_cases_df()
     query_val = str(query_val).strip()
 
-    # A. Search by Case ID
+    # Case search
     if is_case_id(query_val):
         case_match = df[df["caseid"].astype(str) == query_val]
         if not case_match.empty:
             return {"type": "case", "data": case_match.iloc[0].to_dict()}
-    
-    # B. Search by User (Owner)
-    # Try exact match first, then partial
+
+    # User search
     user_match = _get_user_cases(query_val)
-    
+
     if user_match.empty:
-        # Try finding owner containing the string
         mask = df["currentowner"].astype(str).str.lower().str.contains(query_val.lower())
         user_match = df[mask].copy()
 
     if not user_match.empty:
-        # === LOGIC CORRECTION (Mutually Exclusive Buckets) ===
-        
-        # 1. Get only ACTIVE cases for aging calculations
         active_cases_df = _get_active_user_cases(user_match.iloc[0]["currentowner"])
-        
-        # 2. Total is strictly history
+
         total = len(user_match)
-        
-        # 3. Calculate Buckets (Active Only)
-        # Pending (Fresh) = 0 to 7 days
         pending_count = len(active_cases_df[active_cases_df["aging_num"] <= 7])
-        
-        # Overdue = 8 to 21 days (Strict)
         overdue = len(active_cases_df[
-            (active_cases_df["aging_num"] > 7) & 
+            (active_cases_df["aging_num"] > 7) &
             (active_cases_df["aging_num"] <= 21)
         ])
-        
-        # Critical = > 21 days
         critical = len(active_cases_df[active_cases_df["aging_num"] > 21])
-        
-        # 4. Status Breakdown (for the Pie Chart)
-        status_counts = user_match["statuscode"].value_counts().to_dict()
 
+        status_counts = user_match["statuscode"].value_counts().to_dict()
         primary_owner = user_match.iloc[0]["currentowner"]
 
         summary = {
             "owner": primary_owner,
             "total_cases": total,
-            "pending_cases": pending_count, # Means "Fresh (<7d)"
-            "overdue_cases": overdue,       # Means "8-21d"
-            "critical_cases": critical,     # Means ">21d"
+            "pending_cases": pending_count,
+            "overdue_cases": overdue,
+            "critical_cases": critical,
             "status_breakdown": status_counts
         }
         return {"type": "user", "data": summary}
@@ -180,55 +260,84 @@ def get_user_or_case_insights(query_val: str):
     return {"type": "none", "data": None}
 
 # -----------------------------
-# List Getter Functions (Fixed Logic)
+# List Getter Functions
 # -----------------------------
-
 def get_pending_cases(owner_name: str, top_n: int = 5):
-    """
-    Returns 'Fresh' active cases (<= 7 days).
-    """
     active_df = _get_active_user_cases(owner_name)
-    if active_df.empty: return []
+    if active_df.empty:
+        return []
 
-    # Filter <= 7
     fresh_df = active_df[active_df["aging_num"] <= 7]
-    
-    # Sort by Age (Oldest first)
     fresh_df = fresh_df.sort_values(by="aging_num", ascending=False)
-    
     return fresh_df.head(top_n).to_dict(orient="records")
 
-
 def get_overdue_cases(owner_name: str, top_n: int = 3):
-    """
-    Returns 'Overdue' active cases (8 to 21 days).
-    """
     active_df = _get_active_user_cases(owner_name)
-    if active_df.empty: return []
+    if active_df.empty:
+        return []
 
-    # Filter 8-21
     overdue_df = active_df[
-        (active_df["aging_num"] > 7) & 
+        (active_df["aging_num"] > 7) &
         (active_df["aging_num"] <= 21)
     ]
-    
-    # Sort by Age
     overdue_df = overdue_df.sort_values(by="aging_num", ascending=False)
-    
     return overdue_df.head(top_n).to_dict(orient="records")
 
-
 def get_critical_cases(owner_name: str, top_n: int = 3):
-    """
-    Returns 'Critical' active cases (> 21 days).
-    """
     active_df = _get_active_user_cases(owner_name)
-    if active_df.empty: return []
+    if active_df.empty:
+        return []
 
-    # Filter > 21
     critical_df = active_df[active_df["aging_num"] > 21]
-    
-    # Sort by Age
     critical_df = critical_df.sort_values(by="aging_num", ascending=False)
-    
     return critical_df.head(top_n).to_dict(orient="records")
+
+def get_recent_cases(owner, days=5):
+    df = load_cases_df()
+    user_df = _get_user_cases_by_owner(owner, df).copy()
+
+    user_df["reportedon"] = pd.to_datetime(
+        user_df["reportedon"], errors="coerce"
+    )
+
+    cutoff = pd.Timestamp.today() - pd.Timedelta(days=days)
+    recent_df = user_df[user_df["reportedon"] >= cutoff]
+
+    return recent_df.to_dict("records")
+
+def get_latest_resolved_cases(owner_name: str, top_n: int = 3):
+    df = load_cases_df()
+    user_df = _get_user_cases_by_owner(owner_name, df).copy()
+
+    # Ensure datetime types (safe even if already parsed in load_cases_df)
+    user_df["reportedon"] = pd.to_datetime(user_df.get("reportedon", ""), errors="coerce")
+    user_df["closeddate"] = pd.to_datetime(user_df.get("closeddate", ""), errors="coerce")
+
+    # Resolved definition: statuscode says Resolved OR closeddate exists
+    resolved_df = user_df[
+        (user_df["statuscode"].astype(str).str.strip() == "Resolved") |
+        (user_df["closeddate"].notna())
+    ].copy()
+
+    # Keep only rows that truly have a closeddate so sorting is meaningful
+    resolved_df = resolved_df[resolved_df["closeddate"].notna()].copy()
+
+    if resolved_df.empty:
+        return []
+
+    # Sort by latest closed date
+    resolved_df = resolved_df.sort_values(by="closeddate", ascending=False)
+
+    # Compute duration in days
+    resolved_df["resolution_days"] = (
+        (resolved_df["closeddate"] - resolved_df["reportedon"]).dt.total_seconds() / 86400.0
+    ).fillna(0)
+
+    # Ensure effort fields exist + numeric
+    for col in ["configurationeffort", "testingeffort", "totaleffort"]:
+        if col in resolved_df.columns:
+            resolved_df[col] = pd.to_numeric(resolved_df[col], errors="coerce").fillna(0)
+        else:
+            resolved_df[col] = 0
+
+    return resolved_df.head(top_n).to_dict(orient="records")

@@ -27,11 +27,14 @@ def get_logo_path():
 
 LOGO_PATH = get_logo_path()
 
+# ✅ FIX 2: Merged all imports from user_insights to prevent reload issues
 from services.user_insights import (
+    get_recent_cases,
     get_user_or_case_insights,
     get_pending_cases,
     get_overdue_cases,
-    get_critical_cases
+    get_critical_cases,
+    get_latest_resolved_cases
 )
 
 # =========================
@@ -358,8 +361,89 @@ if st.session_state.user_summary:
     m2.metric("Fresh (<7d)", s["pending_cases"])
     m3.metric("Overdue (8-21d)", s["overdue_cases"])
     m4.metric("Critical (>21d)", s["critical_cases"])
-    
+
+    # ✅ FIX 1: Defined 'owner' using the 's' summary dictionary
+    recent_cases = get_recent_cases(s["owner"], days=5)
+
+    st.metric(
+        "Recent Cases (Last 5 Days)",
+        len(recent_cases)
+    )
+
+    # =========================
+    # ✅ Latest Resolved Cases (Top 3)
+    # =========================
     st.markdown("---")
+    st.subheader("✅ Latest Resolved Cases (Top 3)")
+
+    latest_resolved = get_latest_resolved_cases(s["owner"], top_n=3)
+
+    if not latest_resolved:
+        st.info("No resolved cases found for this user.")
+    else:
+        for rc in latest_resolved:
+            case_id = rc.get("caseid", "NA")
+            subj = rc.get("subject", "") or rc.get("MPR_Subject", "") or ""
+            reported_on = pd.to_datetime(rc.get("reportedon", None), errors="coerce")
+            closed_on = pd.to_datetime(rc.get("closeddate", None), errors="coerce")
+
+            header = f"✅ Case {case_id} | {subj}"
+
+            with st.expander(header):
+                st.write(f"**Reported On:** {reported_on}")
+                st.write(f"**Closed On:** {closed_on}")
+                st.write(f"**Resolution Time:** {round(float(rc.get('resolution_days', 0)), 2)} days")
+                st.write(f"**Details:** {rc.get('details','')}")
+
+                # -------------------------
+                # 1) Gantt (Reported -> Closed)
+                # -------------------------
+                if pd.notnull(reported_on) and pd.notnull(closed_on):
+                    gantt_df = pd.DataFrame([{
+                        "Task": f"Case {case_id}",
+                        "Start": reported_on,
+                        "End": closed_on
+                    }])
+
+                    gantt = alt.Chart(gantt_df).mark_bar(size=18).encode(
+                        y=alt.Y("Task:N", title=""),
+                        x=alt.X("Start:T", title="Timeline"),
+                        x2="End:T",
+                        color=alt.value("#7b2ff7"),
+                        tooltip=[
+                            alt.Tooltip("Task:N"),
+                            alt.Tooltip("Start:T"),
+                            alt.Tooltip("End:T")
+                        ]
+                    ).properties(height=70)
+
+                    st.altair_chart(gantt, use_container_width=True)
+                else:
+                    st.info("Timeline not available (missing reportedon/closeddate).")
+
+                # -------------------------
+                # 2) Effort Breakdown (Horizontal Bar)
+                # -------------------------
+                effort_df = pd.DataFrame({
+                    "Effort Type": ["Configuration", "Testing", "Total"],
+                    "Effort": [
+                        float(rc.get("configurationeffort", 0) or 0),
+                        float(rc.get("testingeffort", 0) or 0),
+                        float(rc.get("totaleffort", 0) or 0)
+                    ]
+                })
+
+                effort_chart = alt.Chart(effort_df).mark_bar().encode(
+                    y=alt.Y("Effort Type:N", sort=["Configuration", "Testing", "Total"], title=""),
+                    x=alt.X("Effort:Q", title="Effort"),
+                    color=alt.Color("Effort Type:N", legend=None,
+                        scale=alt.Scale(domain=["Configuration", "Testing", "Total"],
+                                        range=["#2ecc71", "#f39c12", "#e74c3c"])
+                    ),
+                    tooltip=["Effort Type", "Effort"]
+                ).properties(height=140)
+
+                st.altair_chart(effort_chart, use_container_width=True)
     
     # CHARTS
     chart_col1, chart_col2 = st.columns(2)
@@ -426,6 +510,18 @@ if st.session_state.user_summary:
         st.altair_chart(c, use_container_width=True)
 
     st.markdown('</div>', unsafe_allow_html=True)
+
+    st.subheader("🆕 Recent Activity (Last 5 Days)")
+
+    if not recent_cases:
+        st.info("No cases reported in the last 5 days.")
+    else:
+        for c in recent_cases:
+            with st.expander(f"Case {c['caseid']} | {c.get('subject','')}"):
+                st.write(f"Reported On: {c['reportedon']}")
+                st.write(f"Status: {c['statuscode']}")
+                st.write(c.get("details", ""))
+
     
     # Focused List
     st.markdown('<div class="section-card">', unsafe_allow_html=True)
