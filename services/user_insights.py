@@ -340,4 +340,4 @@ def get_latest_resolved_cases(owner_name: str, top_n: int = 3):
         else:
             resolved_df[col] = 0
 
-    return resolved_df.head(top_n).to_dict(orient="records")
+    return resolved_df.head(top_n).to_dict(orient="records")    
