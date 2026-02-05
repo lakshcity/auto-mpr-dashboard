@@ -5,8 +5,8 @@ Steps :
 2. Goto Details page >> goto Notes & Attachments tab
 3. Click on Attach New Document
 4. Observe warning",Facing 'Data Has Been Tampered' issue while attaching document on Incident(Defect),
-536555,,2026-01-21 18:30:00,User Creation,Sagar Verma,,,2026-01-29 00:00:00,,,Admin,,,,,,15718,0.5,0.05,0.58,,,,Web,CR,User Creation - Param Chintan Sheth,User Creation - Param Chintan Sheth,
-537480,,2026-02-01 18:30:00,User Creation,Akarsh Bhatt,,No,2026-02-09 00:00:00,,,Admin,,,,,,1691,0.5,0.05,0.58,,,,Web,CR,Please create ID for-Anil Kumar-TP0139,Please create ID for-Anil Kumar-TP0139,
+536555,,2026-01-21 18:30:00,User Creation,Sagar Verma,,,2026-01-29 00:00:00,2026-02-04 07:28:25.138542,,Admin,,,,,,18707,0.5,0.05,0.58,,,,Web,CR,User Creation - Param Chintan Sheth,User Creation - Param Chintan Sheth,
+537480,,2026-02-01 18:30:00,User Creation,Akarsh Bhatt,,No,2026-02-09 00:00:00,2026-02-04 04:36:10.424558,,Admin,,,,,,2837,0.5,0.05,0.58,,,,Web,CR,Please create ID for-Anil Kumar-TP0139,Please create ID for-Anil Kumar-TP0139,
 493456,,2025-02-16 18:30:00,Configuration,Niharika Verma,,No,,2025-02-20 06:52:16.859747,,Admin,,,,,,0,6,0.60,6.90,,,,Web,CR,Need Access to Project Manager,Need Access to Project Manager,
 495264,,2025-03-05 18:30:00,User Creation,Niharika Verma,,No,,2025-03-21 07:51:49.908716,,Admin,,,,,,0,8,0.80,9.20,,,,Web,CR,Myportal credential request for new joiner - Sushant Patil,Myportal credential request for new joiner - Sushant Patil,
 494092,,2025-02-24 04:41:34,Configuration,Yajurva Tiwari,,No,2025-03-02 18:30:00,2025-03-24 06:45:32.189770,,UI Based Configurations,,,,,,0,1,0.10,1.15,,,,,CR,Email Syndication,Email Syndication : Legal Name updated :-MAX LIFE INSURANCE COMPANY LIMITED to AXIS MAX LIFE INSURANCE LIMITED,
@@ -1638,7 +1638,7 @@ Please check and assist in resolving this issue.",Issue Reported by Axis Bank �
 
 2. Neha.ajmera@nivabupa.com
      Email: harsh.sharma3@nivabupa.com",Change the Email address in Users for receiving OTP,
-513950,,2025-07-29 18:30:00,Nuetral,Vivek Kumar,,,2025-07-31 00:00:00,2025-08-06 09:47:00.233166,,Toolbox,,,,,,9959,24,2.40,27.60,,,,Web,CR,"Kindly add the following email IDs to the 'CRM Alerts' group. These members should receive CRM alert emails when the case status code changes.
+513950,,2025-07-29 18:30:00,,Vivek Kumar,,,2025-07-31 00:00:00,2025-08-06 09:47:00.233166,,Toolbox,,,,,,9959,24,2.40,27.60,,,,Web,CR,"Kindly add the following email IDs to the 'CRM Alerts' group. These members should receive CRM alert emails when the case status code changes.
 
 Please find below the details:
 
@@ -1697,7 +1697,7 @@ As per our understanding, users should not be able to reopen a case after 15 day
 Please find the logic screenshot attached for your reference.
 
 00500976 and 00501064 both old case reponed after 2month",Closed third reminder cases reopened after 15 days,
-501299,,2025-04-27 18:30:00,Nuetral,Niharika Verma,,No,,2025-05-02 06:32:42.300531,,Admin,,,,,,0,8,0.80,9.20,,,,Web,CR,"Kindly create a New User. Please refer the below details:- 
+501299,,2025-04-27 18:30:00,,Niharika Verma,,No,,2025-05-02 06:32:42.300531,,Admin,,,,,,0,8,0.80,9.20,,,,Web,CR,"Kindly create a New User. Please refer the below details:- 
 Customer Name/Account Name: Bank Negara Indonesia
 Account ID: 00015968
 User Name:  Wiratri
@@ -2398,7 +2398,7 @@ Let me know in case of any additional information is required.",add email addres
 522742,,2025-09-30 18:30:00,User Creation,Anubhav Gupta,,No,2025-10-08 00:00:00,2025-10-06 05:12:53.845176,,Admin,,,,,,6829,0.5,0.05,0.58,,,,Web,CR,User creation - Prajwal Rajas Sarode,User creation - Prajwal Rajas Sarode,
 522740,,2025-09-30 18:30:00,User Creation,Niharika Verma,,No,2025-10-08 00:00:00,2025-10-06 04:54:42.121986,,Admin,,,,,,6814,0.5,0.05,0.58,,,,Web,CR,User creation - Harshal Umesh Patil,User creation - Harshal Umesh Patil,
 522744,,2025-09-30 18:30:00,User Creation,Sagar Verma,,,2025-10-08 00:00:00,2025-10-06 05:13:45.742188,,Admin,,,,,,6827,0.5,0.05,0.58,,,,Web,CR,User creation - Samrudhi Mahendra Borawake,User creation - Samrudhi Mahendra Borawake,
-522500,,2025-09-29 18:30:00,Nuetral,Deepali Kumari,,No,2025-10-07 00:00:00,2025-10-06 05:32:44.551872,,Admin,,,,,,8355,0.25,0.03,0.29,,,,Web,CR,"Hi Team,
+522500,,2025-09-29 18:30:00,,Deepali Kumari,,No,2025-10-07 00:00:00,2025-10-06 05:32:44.551872,,Admin,,,,,,8355,0.25,0.03,0.29,,,,Web,CR,"Hi Team,
 
 I am able to log in to the portal (https://my.businessnext.com/app/businessnext/Home/Summary
 ), but in the left navigation pane I can see only a limited set of options instead of the full menu.
@@ -2479,7 +2479,7 @@ Shiv Shankar <shiv.shankar@unitybank.co.in>",Create User for Bank CLient users,
 
 Hierarchy has been attached.",No data Available in Team view for timesheet approval.,
 523144,,2025-10-07 04:51:29,Configuration,Dheeraj,,,2025-10-14 00:00:00,2025-10-10 03:36:04.693742,,Admin,,,,,,4242,0.25,0.03,0.29,,,,Email,CR,Email Syndication,Email Syndication : Request for Role Change to Project Manager in Portal,
-523312,,2025-10-07 18:30:00,Nuetral,Vishal Kumar,,No,2025-10-15 00:00:00,2025-10-10 04:35:18.147368,,Admin,,,,,,2824,0.25,0.03,0.29,,,,Web,CR,Need change the role from Consultant to KAM,Need change the role from Consultant to KAM,
+523312,,2025-10-07 18:30:00,,Vishal Kumar,,No,2025-10-15 00:00:00,2025-10-10 04:35:18.147368,,Admin,,,,,,2824,0.25,0.03,0.29,,,,Web,CR,Need change the role from Consultant to KAM,Need change the role from Consultant to KAM,
 523035,,2025-10-05 18:30:00,Configuration,Vivek Kumar,,No,2025-10-13 00:00:00,2025-10-10 05:05:57.319834,,Company_Settings,,,,,,5598,1,0.10,1.15,,,,Web,CR,"Hi Team,
 
 I would like to kindly request the unfreezing of the timesheet grid from 1st April. This will enable the resource to make the necessary corrections and update their pending timesheet.",Request to Unfreeze Timesheet Grid from 1st April'25,
@@ -2653,7 +2653,7 @@ o	Snoviel",US Delivery - Timesheet to be Open from Apr 2025,
 - US Customer-Internal
 - US Portfolio Manager",Role Access,
 524131,,2025-10-13 18:30:00,Configuration,Anubhav Gupta,,No,2025-10-21 00:00:00,2025-10-22 07:27:11.053793,,Admin,,,,,,11289,0.25,0.03,0.29,,,,Web,CR,"Please correct my reporting manager to ""Himanshu Mishra "" on the portal.",Reporting manager mapping correction,
-524149,,2025-10-13 18:30:00,Nuetral,Vishal Kumar,,No,2025-10-21 00:00:00,2025-10-16 07:13:45.582534,,Admin,,,,,,2602,0.25,0.03,0.29,,,,Web,CR,I am not able to see my time sheet on this mybusinessnext portal.,Regarding Time Sheet,
+524149,,2025-10-13 18:30:00,,Vishal Kumar,,No,2025-10-21 00:00:00,2025-10-16 07:13:45.582534,,Admin,,,,,,2602,0.25,0.03,0.29,,,,Web,CR,I am not able to see my time sheet on this mybusinessnext portal.,Regarding Time Sheet,
 524497,,2025-10-16 07:33:34,Configuration,Anubhav Gupta,,No,2025-10-23 00:00:00,2025-10-22 07:27:05.748423,,Admin,,,,,,8631,0.25,0.03,0.29,,,,Email,CR,Email Syndication,Email Syndication : Request for access to travel desk my portal,
 523604,,2025-10-08 18:30:00,Configuration,Deepali Kumari,,No,2025-10-16 00:00:00,2025-10-13 07:25:02.437276,,Admin,,,,,,5397,0.25,0.03,0.29,,,,Web,CR,"Hi Team,
 
@@ -2700,7 +2700,7 @@ Please let us know if any information is required further to provide the  access
 Regards
 Lahu Gonde",Request for CRM Portal Access,
 524670,,2025-10-17 04:00:00,Configuration,Anubhav Gupta,,No,2025-10-24 00:00:00,2025-10-22 07:27:00.593239,,Admin,,,,,,6986,1.5,0.15,1.73,,,,Web,CR,All resources under me are not visible in Team summary/Team View to approve the timesheet,Not able to see all resources to approve timesheet,
-524681,,2025-10-16 18:30:00,Nuetral,Vishal Kumar,,No,2025-10-24 00:00:00,2025-10-22 08:45:56.175107,,Admin,,,,,,7025,0.5,0.05,0.58,,,,Web,CR,request to add access to U.S. Customer Internal role for viewing tickets raised by US customers.,U.S. Customer Internal role request,
+524681,,2025-10-16 18:30:00,,Vishal Kumar,,No,2025-10-24 00:00:00,2025-10-22 08:45:56.175107,,Admin,,,,,,7025,0.5,0.05,0.58,,,,Web,CR,request to add access to U.S. Customer Internal role for viewing tickets raised by US customers.,U.S. Customer Internal role request,
 524836,,2025-10-21 18:30:00,User Creation,Deepali Kumari,,,2025-10-29 00:00:00,2025-10-24 05:59:29.579519,,Admin,,,,,,2786,0.5,0.05,0.58,,,,Web,CR,User creation - Roshani Vishwakarma,User creation - Roshani Vishwakarma,
 524857,,2025-10-21 18:30:00,User Creation,Deepali Kumari,,,2025-10-29 00:00:00,2025-10-24 05:57:04.554860,,Admin,,,,,,2671,0.5,0.05,0.58,,,,Web,CR,User creation - Suraj Tadakhe,User creation - Suraj Tadakhe,
 524706,,2025-10-17 03:00:00,User Creation,Vivek Kumar,,No,2025-10-24 00:00:00,2025-10-24 05:58:34.237336,,Admin,,,,,,9441,0.5,0.05,0.58,,,,Web,CR,"Need to provide access to Mycah from OBEE to be able to log and view Incidents for Production issues. 
@@ -3029,7 +3029,7 @@ Location: Mumbai",to change the role,
 
 Cases Summary page is not working properly have attached screenshot.",Cases  Summary Page not working proper;y,
 528691,,2025-11-19 18:30:00,Configuration,Himanshu Padaliya,,No,2025-11-27 00:00:00,2025-11-21 11:00:25.997215,,Admin,,,,,,1739,0.25,0.03,0.29,,,,Web,CR,My designation is Engineer in Solution Delivery Group. Please assign appropriate role for my portal account.,To change the role for my portal account.,
-530014,,2025-12-02 18:30:00,Nuetral,Dheeraj,,,2025-12-10 00:00:00,2025-12-09 12:25:36.390812,,Admin,,,,,,9051,0.25,0.03,0.29,,,,Web,CR,,Update team to PDG,
+530014,,2025-12-02 18:30:00,,Dheeraj,,,2025-12-10 00:00:00,2025-12-09 12:25:36.390812,,Admin,,,,,,9051,0.25,0.03,0.29,,,,Web,CR,,Update team to PDG,
 526650,,2025-11-05 18:30:00,User Creation,Deepali Kumari,,,2025-11-13 00:00:00,2025-11-10 04:07:45.148996,,Admin,,,,,,5717,0.5,0.05,0.58,,,,Web,CR,,User Creation,
 526792,,2025-11-06 18:30:00,User Creation,Himanshu Padaliya,,,2025-11-14 00:00:00,2025-11-10 07:00:22.261963,,Admin,,,,,,4511,0.5,0.05,0.58,,,,Web,CR,"Kindly creation Maybank Customer User
 
@@ -3231,7 +3231,7 @@ Please call in case of any concern.
 
 Regards,
 Akshay Sawant",UNITY bank support user ID creation,
-528242,,2025-11-16 18:30:00,Nuetral,Vivek Kumar,,No,2025-11-24 00:00:00,2025-11-25 04:32:17.607126,,Admin,,,,,,11070,0.25,0.03,0.29,,,,Web,CR,I am not able to fill the timesheet as it is not visible.,Timesheet is not visible on my portal,
+528242,,2025-11-16 18:30:00,,Vivek Kumar,,No,2025-11-24 00:00:00,2025-11-25 04:32:17.607126,,Admin,,,,,,11070,0.25,0.03,0.29,,,,Web,CR,I am not able to fill the timesheet as it is not visible.,Timesheet is not visible on my portal,
 528437,,2025-11-17 18:30:00,Configuration,Himanshu Padaliya,,No,2025-11-25 00:00:00,2025-11-21 11:00:36.475580,,Admin,,,,,,4338,0.25,0.03,0.29,,,,Web,CR,I am not able to select the project during timesheet,Timesheet issue,
 528744,,2025-11-19 18:30:00,Configuration,Vishal Kumar,,No,2025-11-27 00:00:00,2025-11-21 09:34:12.753097,,Data Update,,,,,,1376,1,0.10,1.15,,,,Web,CR,"Hello,
 
@@ -3244,7 +3244,7 @@ Request you to solve this error at your earliest.",Project Manager is unable to 
 529117,,2025-11-23 18:30:00,Configuration,Vishal Kumar,,Yes,2025-12-01 00:00:00,2025-11-26 07:14:46.581054,,Admin,,,,,,2676,0.5,0.05,0.58,,,,Web,CR,"Employee ID- TP0101
 Employee Name- Prasad Vijay Mandhare
 Role- Sr. Consultant","Showing Default role in BusinessNext portal, Please Assign consultant role.",
-529188,,2025-11-24 18:30:00,Nuetral,Niharika Verma,,No,2025-12-02 00:00:00,2025-11-28 12:06:38.408735,,Admin,,,,,,4668,0.25,0.03,0.29,,,,Web,CR,"Right role not assigned to my business next portal userid, so not having option of timesheet etc.
+529188,,2025-11-24 18:30:00,,Niharika Verma,,No,2025-12-02 00:00:00,2025-11-28 12:06:38.408735,,Admin,,,,,,4668,0.25,0.03,0.29,,,,Web,CR,"Right role not assigned to my business next portal userid, so not having option of timesheet etc.
 
 Loginid=pratik.jarad@businessnext.com
 
@@ -3268,7 +3268,7 @@ EC2601	Vinayak Minocha	vinayak.minocha@businessnext.com
 EC2574	Snehal Sanjay Sanmukh	snehal.sanmukh@businessnext.com",User deactivate,
 529362,,2025-11-25 18:30:00,Configuration,Himanshu Padaliya,,No,2025-12-03 00:00:00,2025-12-12 08:43:14.718669,,Reports_and_dashboards,,,,,,22982,5,0.50,5.75,,,,Web,CR,"Project Home Page Graphs | US portfolio Manger Roles data in graphs dont show correctly as per view.
 Need to have joint session with Amit or anyone in team to discuss graph config to show accurate data",Project Home Page Graphs | US portfolio Manger Role,
-528839,,2025-11-20 18:30:00,Nuetral,Deepali Kumari,,,2025-11-28 00:00:00,2025-11-26 11:18:15.135653,,Admin,,,,,,7544,0.25,0.03,0.29,,,,Web,Incident,"My Role is Software Engineer , but on the portal it shown as ""Default Role' and the project is also SBI project whereas i am in a Ujjivan Project..
+528839,,2025-11-20 18:30:00,,Deepali Kumari,,,2025-11-28 00:00:00,2025-11-26 11:18:15.135653,,Admin,,,,,,7544,0.25,0.03,0.29,,,,Web,Incident,"My Role is Software Engineer , but on the portal it shown as ""Default Role' and the project is also SBI project whereas i am in a Ujjivan Project..
 Kindly do update ASAP i want to fill the Timesheet.",Role updation,
 527877,,2025-11-12 18:30:00,Configuration,Deepali Kumari,,No,2025-11-20 00:00:00,2025-11-26 11:20:11.395118,,Reports_and_dashboards,,,,,,18739,1,0.10,1.15,,,,Web,CR,"Following updates to the “Ujjivan Reported Cases” report:
 
@@ -3498,7 +3498,7 @@ Shashank Chandra <shashank.chandra@businessnext.com>",New Intern in US Team -Sha
 531085,,2025-12-11 04:15:03,Configuration,Sagar Verma,,,2025-12-18 00:00:00,2026-01-06 06:59:17.651624,,Toolbox,,,,,,37604,1,0.10,1.15,,,,Email,CR,Email Syndication,Email Syndication : No Ticket Alerts Received,
 531155,,2025-12-10 18:30:00,Configuration,Vivek Kumar,,No,2025-12-18 00:00:00,2025-12-16 04:40:15.529135,,Admin,,,,,,6914,0.25,0.03,0.29,,,,Web,CR,Please find the attached screenshot where for the particular module (TUCIBIL) all sub modules are not available.,All sub modules not available in Timesheet,
 531176,,2025-12-10 18:30:00,Configuration,Himanshu Padaliya,,No,2025-12-18 00:00:00,2025-12-12 08:42:47.499312,,Process and Layouts,,,,,,1348,7,0.70,8.05,,,,Web,CR,Remove Dependency filter From Productions of all accounts in US portfolio,Remove Dependency filter From Productions of all accounts in US portfolio,
-531187,,2025-12-10 18:30:00,Nuetral,Kumar Verma,,No,2025-12-18 00:00:00,2025-12-19 04:36:02.665034,,Reports_and_dashboards,,,,,,11146,1,0.10,1.15,,,,Web,CR,"Unable to download SAG Defect Statistics report. getting error "" Unable to execute schema only"".",Unable to download SAG Defect Statistics report,
+531187,,2025-12-10 18:30:00,,Kumar Verma,,No,2025-12-18 00:00:00,2025-12-19 04:36:02.665034,,Reports_and_dashboards,,,,,,11146,1,0.10,1.15,,,,Web,CR,"Unable to download SAG Defect Statistics report. getting error "" Unable to execute schema only"".",Unable to download SAG Defect Statistics report,
 531247,,2025-12-11 18:30:00,User Creation,Anubhav Gupta,,No,2025-12-19 00:00:00,2025-12-16 06:13:02.296285,,Admin,,,,,,5830,0.5,0.05,0.58,,,,Web,CR,"Hi Team
 
 
@@ -3550,7 +3550,7 @@ Please deactivate below user id in MY Portal.
 EMP Code 	EMP Name	Email Id
 EC3139	Rubal Sharma	rubal.sharma@businessnext.com
 IEC042	Muhammad Sulaiman	muhammad.sulaiman@businessnext.com",User deactivate,
-531902,,2025-12-16 18:30:00,Nuetral,Vivek Kumar,,,2025-12-24 00:00:00,2025-12-24 08:56:46.934044,,Admin,,,,,,10159,0.25,0.03,0.29,,,,Web,CR,"I am facing an issue with my portal access. The portal link is showing my Role(s) as Default Role, and because of this, I am unable to search any case.
+531902,,2025-12-16 18:30:00,,Vivek Kumar,,,2025-12-24 00:00:00,2025-12-24 08:56:46.934044,,Admin,,,,,,10159,0.25,0.03,0.29,,,,Web,CR,"I am facing an issue with my portal access. The portal link is showing my Role(s) as Default Role, and because of this, I am unable to search any case.
 
 Role-Engr Solution Delivery
 Team-SDG",Unable to Search Cases – Role Showing as Default Role,
@@ -3648,7 +3648,7 @@ I have also attached the screenshot.
 
 Please add default team to PDG for my user",Name is not reflecting in Dev Accountable picker in ReleaseSubmitForm,
 527311,,2025-11-10 11:20:01,Configuration,Deepali Kumari,,,2025-11-17 00:00:00,2025-11-12 04:49:21.525498,,Admin,,,,,,2488,0.25,0.03,0.29,,,,Email,CR,Email Syndication,Email Syndication : Require Access to BusinessNext Portal,
-531903,,2025-12-16 18:30:00,Nuetral,Vishal Kumar,,No,2025-12-24 00:00:00,2026-01-05 07:11:06.572812,,Admin,,,,,,27330,0.5,0.05,0.58,,,,Web,CR,"I am facing an issue with my portal access. The portal link is showing my Role(s) as Consultant Role
+531903,,2025-12-16 18:30:00,,Vishal Kumar,,No,2025-12-24 00:00:00,2026-01-05 07:11:06.572812,,Admin,,,,,,27330,0.5,0.05,0.58,,,,Web,CR,"I am facing an issue with my portal access. The portal link is showing my Role(s) as Consultant Role
  
 Role-Engr Solution Delivery
 Team-SDG",Role Showing as Consultant Role,
@@ -3674,7 +3674,7 @@ Kindly review the existing rule and incorporate the same for US customers as wel
 Please feel free to contact me if any clarification or discussion is required.",Reopen cases restriction for US Customer,
 532765,,2025-12-23 18:30:00,User Creation,Deepali Kumari,,,2025-12-31 00:00:00,2026-01-06 05:10:30.814840,,Admin,,,,,,18624,0.5,0.05,0.58,,,,Web,CR,User Creation - Deepak Kaushik,User Creation - Deepak Kaushik,
 531597,,2025-12-15 12:16:21,Configuration,Vishal Kumar,,No,2025-12-22 00:00:00,2026-01-05 07:12:26.913898,,Company_Settings,,,,,,29933,1,0.10,1.15,,,,Email,CR,Email Syndication,Email Syndication : Unable to Select Account Name in Incident Section,
-531147,,2025-12-10 18:30:00,Nuetral,Vishal Kumar,,No,2025-12-18 00:00:00,2026-01-05 07:13:20.378215,,Company_Settings,,,,,,35898,1.2,0.12,1.38,,,,Web,CR,"Case created through Incident Layout - 
+531147,,2025-12-10 18:30:00,,Vishal Kumar,,No,2025-12-18 00:00:00,2026-01-05 07:13:20.378215,,Company_Settings,,,,,,35898,1.2,0.12,1.38,,,,Web,CR,"Case created through Incident Layout - 
 Assigned to value stamped as ""Incident"", selected user name should be stamped
 Applies To value stamped as ""L1 - ITSM"", selected value should be stamped",wrong 'Assigned to' and 'Applies to' values are getting stamped when case created from Incident layout,
 533258,,2025-12-30 18:30:00,Configuration,Himanshu Padaliya,,No,2026-01-07 00:00:00,2026-01-02 05:20:17.988521,,Admin,,,,,,2602,0.25,0.03,0.29,,,,Web,CR,"Employee Id: EC1122
@@ -3862,7 +3862,7 @@ Userid: amit.vishwakarma1@crmnext.in",Change role to Project Manager for my User
 534050,,2026-01-07 18:30:00,User Creation,Veeresh Kumar Verma,,,2026-01-15 00:00:00,2026-01-20 05:05:52.025000,,Admin,,,,,,17296,0.5,0.05,0.58,,,,Web,CR,User Creation - Jitesh Shivanand Bagale,User Creation - Jitesh Shivanand Bagale,
 505480,,2025-05-28 18:30:00,Configuration,Niharika Verma,,No,2025-06-04 18:30:00,2025-06-11 11:43:25.190538,,Admin,,,,,,0,6,0.60,6.90,,,,Web,CR,Please provide role US Customer - Internal,Please provide role US Customer - Internal,
 534791,,2026-01-14 18:30:00,User Creation,Himanshu Padaliya,,No,2026-01-22 00:00:00,2026-01-16 05:12:55.170866,,Admin,,,,,,1483,0.5,0.05,0.58,,,,Web,CR,Please create ID for-Vidit Chauhan-EC3933,Please create ID for-Vidit Chauhan-EC3933,
-534424,,2026-01-11 18:30:00,Nuetral,Himanshu Padaliya,,No,2026-01-19 00:00:00,2026-01-16 05:13:06.579713,,Admin,,,,,,5333,2,0.20,2.30,,,,Web,CR,"Hi Team,
+534424,,2026-01-11 18:30:00,,Himanshu Padaliya,,No,2026-01-19 00:00:00,2026-01-16 05:13:06.579713,,Admin,,,,,,5333,2,0.20,2.30,,,,Web,CR,"Hi Team,
 
 We have received a request from the BDI team regarding user access for the BDI portal.
 
@@ -3883,7 +3883,7 @@ Account ID:  1245
 
 
 Kindly check and take the necessary action at the earliest. Please let us know if any further information is required.",Regarding Correct User Access for BDI Portal,
-533690,,2026-01-04 18:30:00,Nuetral,Deepali Kumari,,,2026-01-12 00:00:00,2026-01-16 05:53:23.939588,,Process and Layouts,,,,,,15759,2,0.20,2.30,,,,Web,CR,"Please find the requirement IDs: 50591, 50627 which are raised by DSG team and not syncing to azure due to area path.
+533690,,2026-01-04 18:30:00,,Deepali Kumari,,,2026-01-12 00:00:00,2026-01-16 05:53:23.939588,,Process and Layouts,,,,,,15759,2,0.20,2.30,,,,Web,CR,"Please find the requirement IDs: 50591, 50627 which are raised by DSG team and not syncing to azure due to area path.
 
 Please follow the below steps to solve this out:
 Make the required changes to the below Business Enforcement Rules.
@@ -4056,3 +4056,5 @@ Due to this issue I'm unable to fill my timesheet. Request to please look into t
 
 Attached assigned and visible projects screens.",Assigned Project is not visible in Timesheet,
 537479,,2026-02-01 18:30:00,User Creation,Vivek Kumar,,No,2026-02-09 00:00:00,,,Admin,,,,,,1816,0.5,0.05,0.58,,,,Web,CR,Please create ID for-Ankit Jalal-TP0140,Please create ID for-Ankit Jalal-TP0140,
+537700,,2026-02-02 18:30:00,User Creation,Vivek Kumar,,No,2026-02-10 00:00:00,,,Admin,,,,,,1505,0.5,0.05,0.58,,,,Web,CR,Please create My Portal for Sanjay Massad - EC3941 along with travel desk.,Please create My Portal for Sanjay Massad - EC3941,
+537855,,2026-02-03 18:30:00,Configuration,Vivek Kumar,,No,2026-02-11 00:00:00,,,Reports_and_dashboards,,,,,,91,1,0.10,1.15,,,,Web,CR,"As discussed,  need to add the layout field in report name: All Production Incident Report",Report Name : All Production Incident Report need to add layout name in report.,
