@@ -176,7 +176,13 @@ st.markdown("<h1 style='text-align:center;'>Auto MPR Response Recommendation</h1
 st.markdown("<br>", unsafe_allow_html=True)
 c1, c2, c3 = st.columns([1, 2, 1])
 with c2:
-    query_mode = st.radio("", ["General MPR Issue", "User-Specific View"], horizontal=True)
+    query_mode = st.radio(
+    "Query Mode",
+    ["General MPR Issue", "User-Specific View"],
+    horizontal=True,
+    label_visibility="collapsed"
+)
+
 
 # =========================
 # Load Resources

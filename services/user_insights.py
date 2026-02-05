@@ -104,13 +104,21 @@ def load_cases_df():
         try:
             temp_df = pd.read_csv(real_data_path, encoding=enc)
 
+            # NOTE: DO NOT rename MPR_Subject -> subject directly because CSV already has 'subject'
+            # This caused: "DataFrame columns are not unique" warnings. (seen in Streamlit logs)
             column_mapping = {
                 "ownername": "currentowner",
-                "ageing": "ageing",        # keep original name
-                "Statuscode": "Statuscode", # keep raw column if present
-                "MPR_Subject": "subject",
+                "ageing": "ageing",          # keep original name
+                "Statuscode": "Statuscode"   # keep raw column if present
             }
             temp_df.rename(columns=column_mapping, inplace=True)
+
+            # ---- FIX DUPLICATE SUBJECT COLUMN ----
+            # If both 'subject' and 'MPR_Subject' exist, keep 'subject' and rename MPR_Subject to 'mpr_subject'
+            if "subject" in temp_df.columns and "MPR_Subject" in temp_df.columns:
+                temp_df.rename(columns={"MPR_Subject": "mpr_subject"}, inplace=True)
+            elif "MPR_Subject" in temp_df.columns and "subject" not in temp_df.columns:
+                temp_df.rename(columns={"MPR_Subject": "subject"}, inplace=True)
 
             # Ensure required columns exist
             if "currentowner" not in temp_df.columns:
@@ -340,4 +348,4 @@ def get_latest_resolved_cases(owner_name: str, top_n: int = 3):
         else:
             resolved_df[col] = 0
 
-    return resolved_df.head(top_n).to_dict(orient="records")    
+    return resolved_df.head(top_n).to_dict(orient="records")
