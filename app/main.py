@@ -11,6 +11,10 @@ if ROOT_DIR not in sys.path:
 
 BASE_DIR = Path(__file__).resolve().parent
 
+INDEX_FILE = "data/case_index_master.faiss"
+META_FILE  = "data/case_meta_master.pkl"
+STATE_FILE = "data/case_hash_state.pkl"  # optional
+
 # --- FIX: SMART LOGO FINDER ---
 def get_logo_path():
     """Tries to find the logo in multiple locations to prevent crashes."""
@@ -49,7 +53,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import altair as alt
 
-CSV_PATH = "backend_api/data/cases_master.csv"
+Path("data/case_index_master.faiss")
 
 # =========================
 # Streamlit UI Config
@@ -191,64 +195,33 @@ scale = "master"
 
 # Cache with TTL so index reloads periodically (e.g. every 30 minutes)
 @st.cache_resource(ttl="30m")
-def load_resources(scale):
+def load_resources():
     try:
-        # -------------------------
-        # PRIMARY: CSV / cases_master FAISS index
-        # -------------------------
         model = SentenceTransformer("all-MiniLM-L6-v2")
+        
+        # ROOT_DIR is defined at the top of main.py
+        index_path = Path(ROOT_DIR) / "data" / "case_index_master.faiss"
+        meta_path  = Path(ROOT_DIR) / "data" / "case_meta_master.pkl"
 
-        index_candidates = [
-            BASE_DIR.parent / "data" / f"case_index_master.faiss",
-            BASE_DIR / "data" / f"case_index_master.faiss",
-            Path(f"data/case_index_master.faiss")
-        ]
+        if not index_path.exists():
+            # Fallback for local UI development if data is inside ui/data
+            index_path = BASE_DIR / "data" / "case_index_master.faiss"
+            meta_path = BASE_DIR / "data" / "case_meta_master.pkl"
 
-        index_path = None
-        for p in index_candidates:
-            if p.exists():
-                index_path = p
-                break
-
-        if not index_path:
-            raise FileNotFoundError("CSV FAISS index not found")
-
-        index = faiss.read_index(str(index_path))
-
-        meta_path = (
-            str(index_path)
-            .replace(".faiss", ".pkl")
-            .replace("case_index_", "case_meta_")
-        )
-
-        with open(meta_path, "rb") as f:
-            metadata = pickle.load(f)
-
-        return model, index, metadata
-
-    except Exception as e_csv:
-        # -------------------------
-        # FALLBACK: PDF FAISS index
-        # -------------------------
-        try:
-            index = faiss.read_index("data/pdf_index.faiss")
-            with open("data/pdf_meta.pkl", "rb") as f:
+        if index_path.exists():
+            index = faiss.read_index(str(index_path))
+            with open(meta_path, "rb") as f:
                 metadata = pickle.load(f)
+            return model, index, metadata
+        else:
+            st.error(f"Files not found at {index_path}")
+            return model, None, []
 
-            return SentenceTransformer("all-MiniLM-L6-v2"), index, metadata
+    except Exception as e:
+        st.error(f"Resource Load Error: {e}")
+        return None, None, []
 
-        except Exception as e_pdf:
-            # Last-resort safe fallback (app should not crash)
-            st.error(
-                f"Error loading FAISS resources.\n"
-                f"CSV index error: {e_csv}\n"
-                f"PDF index error: {e_pdf}"
-            )
-            return SentenceTransformer("all-MiniLM-L6-v2"), None, []
-
-
-
-model, index, metadata = load_resources(scale)
+model, index, metadata = load_resources()
 
 # =========================
 # Inputs
