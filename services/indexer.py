@@ -51,22 +51,11 @@ def load_csv_with_fallback(path: Path) -> pd.DataFrame:
     raise RuntimeError("Failed to load CSV with known encodings")
 
 def get_latest_snapshot() -> Path:
-    candidates = []
-
-    # prefer parquet snapshots
-    candidates += list(ROOT_DATA_DIR.glob("cases_snapshot_*.parquet"))
-    candidates += list(BACKEND_DATA_DIR.glob("cases_snapshot_*.parquet"))
-
-    # fallback to csv snapshots
-    candidates += list(ROOT_DATA_DIR.glob("cases_snapshot_*.csv"))
-    candidates += list(BACKEND_DATA_DIR.glob("cases_snapshot_*.csv"))
-
-    if not candidates:
-        raise FileNotFoundError(f"No snapshots found in {ROOT_DATA_DIR} or {BACKEND_DATA_DIR}")
-
-    latest = max(candidates, key=lambda p: p.stat().st_mtime)
-    print(f"[Indexer] 📂 Using latest snapshot: {latest}")
-    return latest
+    redash_file = ROOT_DATA_DIR / "redash_latest.csv"
+    if not redash_file.exists():
+        raise FileNotFoundError(f"redash_latest.csv not found at {redash_file}")
+    print(f"[Indexer] 📂 Using Redash export: {redash_file}")
+    return redash_file
 
 def find_col(df, keywords):
     for col in df.columns:
