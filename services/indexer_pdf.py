@@ -1,4 +1,5 @@
 ﻿import json
+import sys
 import hashlib
 import pickle
 from datetime import datetime
@@ -9,13 +10,12 @@ import faiss
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
-import sys
-from pathlib import Path
-
-ROOT_DIR = Path(__file__).resolve().parents[1]
-if str(ROOT_DIR) not in sys.path:
-    sys.path.insert(0, str(ROOT_DIR))
-
+# --- FIX: Add project root to system path ---
+# This allows python to find 'core' even when running from 'services/'
+current_file = Path(__file__).resolve()
+project_root = current_file.parent.parent
+sys.path.append(str(project_root))
+# --------------------------------------------
 
 from core.config import (
     PDF_DIR,

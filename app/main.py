@@ -153,6 +153,63 @@ def _rate_color(percent: float) -> str:
     else:
         return '#2ecc71'   # green
 
+# --- Add near your other helpers ---
+import streamlit.components.v1 as components
+
+def _avg_resolution_gauge(avg_bd: float, max_bd: int = 20):
+    """
+    5-band horizontal gauge for Avg Resolution Time (BD), with a rule & label at the current value.
+    Bands (BD): 0–2 (green), 2–4 (teal), 4–7 (yellow), 7–14 (amber), 14–max (red).
+    """
+    import altair as alt
+    import pandas as pd
+
+    # Clamp values
+    try:
+        v = float(avg_bd)
+    except:
+        v = 0.0
+    v = max(0.0, min(v, float(max_bd)))
+
+    bands = [
+        {"label": "≤2",          "start": 0,  "end": min(2, max_bd),   "color": "#2ecc71"},  # green
+        {"label": "2–4",         "start": 2,  "end": min(4, max_bd),   "color": "#1abc9c"},  # teal
+        {"label": "4–7",         "start": 4,  "end": min(7, max_bd),   "color": "#f1c40f"},  # yellow
+        {"label": "7–14",        "start": 7,  "end": min(14, max_bd),  "color": "#f39c12"},  # amber
+        {"label": f"≥{min(14,max_bd)}", "start": 14, "end": max_bd,    "color": "#e74c3c"},  # red
+    ]
+
+    # Normalize any inverted ranges if max_bd < some band cut
+    bands = [b for b in bands if b["start"] < b["end"]]
+
+    df = pd.DataFrame(bands)
+
+    base = alt.Chart(df).mark_bar(height=16).encode(
+        x=alt.X("start:Q",
+                scale=alt.Scale(domain=[0, max_bd]),
+                axis=alt.Axis(title="BD", values=[0,2,4,7,14,max_bd], labelFontSize=10, titleFontSize=11)),
+        x2="end:Q",
+        color=alt.Color("label:N", scale=alt.Scale(
+            domain=[b["label"] for b in bands],
+            range=[b["color"] for b in bands]),
+            legend=None),
+        tooltip=[alt.Tooltip("label:N"), alt.Tooltip("start:Q"), alt.Tooltip("end:Q")]
+    )
+
+    marker_df = pd.DataFrame({"x": [v], "txt": [f"{avg_bd:.2f} BD"]})
+
+    rule = alt.Chart(marker_df).mark_rule(color="#2c3e50", size=2).encode(x="x:Q")
+    text = alt.Chart(marker_df).mark_text(dy=-8, fontSize=12, fontWeight="bold", color="#2c3e50").encode(
+        x="x:Q", text="txt:N"
+    )
+
+    chart = (base + rule + text).properties(height=48, width=260) \
+        .configure_view(stroke=None) \
+        .configure_axis(grid=False, domain=False)
+
+    return chart
+
+
 def _trend_arrow(avg_bd: float) -> str:
     """
     Trend arrow based on absolute Avg Resolution Time (BD).
@@ -398,53 +455,58 @@ if query_mode == "User-Specific View" and run_clicked:
 
                 # Visuals panel on the right
                 with vcol:
-                    st.markdown("#### Visuals", help="All visuals computed on business days (weekends excluded).")
+                    st.subheader("Visuals", help="All visuals computed on business days (weekends excluded).")
 
-                    # Colored dots for status-like metrics
                     open_ct      = int(s["open_cases"])
                     overdue_ct   = int(sla_table["overdue_active"])
                     critical_ct  = int(sla_table["critical_active"])
                     awaiting_ct  = int(sla_table["awaiting_input"])
 
-                    # Open: amber if >0 and <5% of total; red if ≥5%; green if 0
+                    total_cases = int(s["total_cases"])
                     open_ratio = (open_ct / total_cases) if total_cases > 0 else 0
-                    if open_ct == 0:
-                        open_color = '#2ecc71'  # green
-                    elif open_ratio < 0.05:
-                        open_color = '#f39c12'  # amber
-                    else:
-                        open_color = '#e74c3c'  # red
 
-                    overdue_color  = '#2ecc71' if overdue_ct == 0  else '#f39c12'   # green else amber
-                    critical_color = '#2ecc71' if critical_ct == 0 else '#e74c3c'   # green else red
-                    await_color    = '#2ecc71' if awaiting_ct == 0 else '#e74c3c'   # green else red
+                    # Color rules
+                    # Open: green if 0; amber if >0 and <5% of total; red if ≥5%
+                    if open_ct == 0:
+                        open_color = '#2ecc71'
+                    elif open_ratio < 0.05:
+                        open_color = '#f39c12'
+                    else:
+                        open_color = '#e74c3c'
+
+                    overdue_color  = '#2ecc71' if overdue_ct == 0  else '#f39c12'
+                    critical_color = '#2ecc71' if critical_ct == 0 else '#e74c3c'
+                    await_color    = '#2ecc71' if awaiting_ct == 0 else '#e74c3c'
 
                     dot_open     = _dot(open_color)
                     dot_overdue  = _dot(overdue_color)
                     dot_critical = _dot(critical_color)
                     dot_await    = _dot(await_color)
 
-                    html = ""
-                    html += _legend_row("Open Cases",              dot_open,     f"{open_ct}")
-                    html += _legend_row("Overdue (≥7 BD)",         dot_overdue,  f"{overdue_ct}")
-                    html += _legend_row("Critical (≥14 BD)",       dot_critical, f"{critical_ct}")
-                    html += _legend_row("Awaiting Input (>2 BD)",  dot_await,    f"{awaiting_ct}")
+                    # Build list HTML (no stray </div> by using components.html)
+                    rows_html = ""
+                    rows_html += _legend_row("Open Cases",              dot_open,     f"{open_ct}")
+                    rows_html += _legend_row("Overdue (≥7 BD)",         dot_overdue,  f"{overdue_ct}")
+                    rows_html += _legend_row("Critical (≥14 BD)",       dot_critical, f"{critical_ct}")
+                    rows_html += _legend_row("Awaiting Input (>2 BD)",  dot_await,    f"{awaiting_ct}")
 
-                    st.markdown(f"""
+                    visual_box = f"""
                     <div style="border:1px solid #EEF0F3; border-radius:8px; background:#FFF; padding:6px;">
-                        {html}
+                        {rows_html}
                     </div>
-                    """, unsafe_allow_html=True)
+                    """
+                    # Dynamically size the iframe height to avoid scrollbars
+                    components.html(visual_box, height=(4 * 36) + 20, scrolling=False)
 
-                    # Resolution Rate donut ring
-                    rate_color = _rate_color(resolution_rate)
-                    ring = _resolution_ring_chart(resolution_rate, rate_color)
+                    # Resolution Rate donut
+                    resolved_in_period = int(filtered_df["closeddate"].notna().sum())
+                    resolution_rate = round((resolved_in_period / total_cases) * 100, 2) if total_cases > 0 else 0.0
                     st.markdown("##### Resolution Rate")
-                    st.altair_chart(ring, use_container_width=False)
+                    st.altair_chart(_resolution_ring_chart(resolution_rate, _rate_color(resolution_rate)), use_container_width=False)
 
-                    # Avg Resolution Time (BD) trend arrow
+                    # Avg Resolution Time (5‑band horizontal gauge)
                     st.markdown("##### Avg Resolution Time (BD)")
-                    st.markdown(_trend_arrow(sla_table["avg_resolution"]), unsafe_allow_html=True)
+                    st.altair_chart(_avg_resolution_gauge(sla_table["avg_resolution"], max_bd=20), use_container_width=True)
 
                 st.caption("All metrics calculated on **business days** (weekends excluded).")
 
