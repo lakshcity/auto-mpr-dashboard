@@ -1,0 +1,47 @@
+name: Monthly major rollover (vX.0.0)
+
+on:
+  schedule:
+    # Runs monthly at 00:05 IST (18:35 UTC)
+    - cron: "35 18 1 * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  bump-major-and-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute next major
+        id: next
+        run: |
+          set -e
+          CURR="$(cat VERSION | tr -d '\n' | tr -d ' ')"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURR"
+          NEXT_MAJOR=$((MAJOR + 1))
+          NEXT="${NEXT_MAJOR}.0.0"
+          echo "next_major=$NEXT" >> $GITHUB_OUTPUT
+
+      - name: Update VERSION & tag
+        run: |
+          set -e
+          NEXT="${{ steps.next.outputs.next_major }}"
+          echo "$NEXT" > VERSION
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add VERSION
+          git commit -m "chore: start new major ${NEXT}"
+          git push origin HEAD:master
+
+          TAG="v${NEXT}"
+
+          git tag -a "${TAG}" -m "Start new major ${TAG}"
+          git push origin "${TAG}"

@@ -19,9 +19,7 @@ venv/
 logs/
 *.log
 
-# Data artifacts (large / generated)
-#data/*.faiss
-#data/*.pkl
+
 
 # OS
 .DS_Store

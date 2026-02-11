@@ -1,0 +1,47 @@
+name: Auto tag patch (vX.Y.Z) on push to master
+
+on:
+  push:
+    branches: [ master ]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  bump-patch-and-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read VERSION and compute next patch
+        id: bump
+        run: |
+          set -e
+          CURR="$(cat VERSION | tr -d '\n' | tr -d ' ')"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURR"
+          NEXT_PATCH=$((PATCH + 1))
+          NEXT="${MAJOR}.${MINOR}.${NEXT_PATCH}"
+          echo "next_version=$NEXT" >> $GITHUB_OUTPUT
+
+      - name: Update VERSION, commit, and tag
+        run: |
+          set -e
+
+          NEXT="${{ steps.bump.outputs.next_version }}"
+          echo "$NEXT" > VERSION
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add VERSION
+          git commit -m "chore: bump version to ${NEXT}"
+          git push origin HEAD:master
+
+          TAG="v${NEXT}"
+
+          git tag -a "${TAG}" -m "Release ${TAG}"
+          git push origin "${TAG}"
