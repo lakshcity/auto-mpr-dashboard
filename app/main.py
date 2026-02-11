@@ -300,12 +300,32 @@ if query_mode == "User-Specific View" and run_clicked:
             es_col, sla_col = st.columns(2)
             with es_col:
                 st.markdown("### Executive Summary")
-                st.write({
-                    "Owner": s["owner"],
-                    "Scope (cases)": s["total_cases"],
-                    "Open": s["open_cases"],
-                    "New (≤2 BD)": s["new_cases"]
-                })
+
+                # --- Build Exec Summary table (Business Days logic)
+                # sla already computed just below, but we need it here too for the table.
+                sla_table = compute_sla_metrics_bd(filtered_df)
+
+                # Resolved-in-period = closed within the currently filtered frame
+                resolved_in_period = int(filtered_df["closeddate"].notna().sum())
+                total_cases = int(s["total_cases"])
+                resolution_rate = round((resolved_in_period / total_cases) * 100, 2) if total_cases > 0 else 0.0
+
+                exec_rows = [
+                    {"Metric": "Total Cases",               "Value": total_cases,                   "Visual Representation": "Large KPI Card"},
+                    {"Metric": "Open Cases",                "Value": int(s["open_cases"]),          "Visual Representation": "Status Indicator"},
+                    {"Metric": "Overdue (≥7 BD)",           "Value": int(sla_table["overdue_active"]),  "Visual Representation": "Status Indicator"},
+                    {"Metric": "Critical (≥14 BD)",         "Value": int(sla_table["critical_active"]), "Visual Representation": "Status Indicator"},
+                    {"Metric": "Awaiting Input (>2 BD)",    "Value": int(sla_table["awaiting_input"]),   "Visual Representation": "Status Indicator"},
+                    {"Metric": "Resolution Rate (%)",       "Value": resolution_rate,               "Visual Representation": "Circular Progress Ring"},
+                    {"Metric": "Avg Resolution Time (BD)",  "Value": float(sla_table["avg_resolution"]), "Visual Representation": "Trend Arrow"},
+                ]
+                es_df = pd.DataFrame(exec_rows, columns=["Metric", "Value", "Visual Representation"])
+
+                st.dataframe(
+                    es_df,
+                    use_container_width=True
+                )
+                st.caption("All metrics calculated on **business days** (weekends excluded).")
             with sla_col:
                 st.markdown("### SLA Metrics")
                 sla = compute_sla_metrics_bd(filtered_df)
@@ -546,12 +566,29 @@ if query_mode == "User-Specific View" and not run_clicked and st.session_state.f
     es_col, sla_col = st.columns(2)
     with es_col:
         st.markdown("### Executive Summary")
-        st.write({
-            "Owner": s["owner"],
-            "Scope (cases)": s["total_cases"],
-            "Open": s["open_cases"],
-            "New (≤2 BD)": s["new_cases"]
-        })
+
+        sla_table = compute_sla_metrics_bd(filtered_df)
+        resolved_in_period = int(filtered_df["closeddate"].notna().sum())
+        total_cases = int(s["total_cases"])
+        resolution_rate = round((resolved_in_period / total_cases) * 100, 2) if total_cases > 0 else 0.0
+
+        exec_rows = [
+            {"Metric": "Total Cases",               "Value": total_cases,                   "Visual Representation": "Large KPI Card"},
+            {"Metric": "Open Cases",                "Value": int(s["open_cases"]),          "Visual Representation": "Status Indicator"},
+            {"Metric": "Overdue (≥7 BD)",           "Value": int(sla_table["overdue_active"]),  "Visual Representation": "Status Indicator"},
+            {"Metric": "Critical (≥14 BD)",         "Value": int(sla_table["critical_active"]), "Visual Representation": "Status Indicator"},
+            {"Metric": "Awaiting Input (>2 BD)",    "Value": int(sla_table["awaiting_input"]),   "Visual Representation": "Status Indicator"},
+            {"Metric": "Resolution Rate (%)",       "Value": resolution_rate,               "Visual Representation": "Circular Progress Ring"},
+            {"Metric": "Avg Resolution Time (BD)",  "Value": float(sla_table["avg_resolution"]), "Visual Representation": "Trend Arrow"},
+        ]
+        es_df = pd.DataFrame(exec_rows, columns=["Metric", "Value", "Visual Representation"])
+
+        st.dataframe(
+            es_df,
+            use_container_width=True
+        )
+        st.caption("All metrics calculated on **business days** (weekends excluded).")
+
     with sla_col:
         st.markdown("### SLA Metrics")
         sla = compute_sla_metrics_bd(filtered_df)
