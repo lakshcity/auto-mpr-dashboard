@@ -402,7 +402,7 @@ if query_mode == "User-Specific View" and run_clicked:
                         range=['#2ecc71', '#f39c12', '#e74c3c']
                     )),
                     tooltip=['Category', 'Cases']
-                ).properties(height=220)
+                ).properties(height=300)
                 st.altair_chart(rc, use_container_width=True)
 
             # --- Latest Top 3 Resolved
@@ -645,7 +645,7 @@ if query_mode == "User-Specific View" and not run_clicked and st.session_state.f
                 range=['#2ecc71', '#f39c12', '#e74c3c']
             )),
             tooltip=['Category', 'Cases']
-        ).properties(height=220)
+        ).properties(height=300)
         st.altair_chart(rc, use_container_width=True)
 
     # --- 🆕 Focused Case View (UPDATED - session branch)
