@@ -2,14 +2,11 @@
 import sys
 import os
 from pathlib import Path
-
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
-
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = Path(ROOT_DIR) / "data"
-
 INDEX_FILE = "data/case_index_master.faiss"
 META_FILE = "data/case_meta_master.pkl"
 STATE_FILE = "data/case_hash_state.pkl"  # optional
@@ -18,10 +15,10 @@ STATE_FILE = "data/case_hash_state.pkl"  # optional
 def get_logo_path():
     """Tries to find the logo in multiple locations to prevent crashes."""
     candidates = [
-        BASE_DIR / "ui" / "assets" / "company_logo.png",   # Standard
-        BASE_DIR.parent / "assets" / "company_logo.png",   # Root assets
-        BASE_DIR / "assets" / "company_logo.png",          # Local assets
-        Path("assets/company_logo.png")                    # Current Working Dir
+        BASE_DIR / "ui" / "assets" / "company_logo.png",  # Standard
+        BASE_DIR.parent / "assets" / "company_logo.png",  # Root assets
+        BASE_DIR / "assets" / "company_logo.png",         # Local assets
+        Path("assets/company_logo.png")                   # Current Working Dir
     ]
     for path in candidates:
         if path.exists():
@@ -107,7 +104,6 @@ with st.sidebar:
         st.image(LOGO_PATH, use_container_width=True)
     st.markdown("#### Auto MPR", unsafe_allow_html=True)
     st.caption("Internal AI Demo")
-
     if st.button("Clear Cache & Reset"):
         st.cache_resource.clear()
         st.rerun()
@@ -140,11 +136,11 @@ def load_resources():
         model = SentenceTransformer("all-MiniLM-L6-v2")
         # ROOT_DIR is defined at the top of main.py
         index_path = DATA_DIR / "case_index_master.faiss"
-        meta_path  = DATA_DIR / "case_meta_master.pkl"
+        meta_path = DATA_DIR / "case_meta_master.pkl"
         if not index_path.exists():
             # Fallback for local UI development if data is inside ui/data
             index_path = BASE_DIR / "data" / "case_index_master.faiss"
-            meta_path  = BASE_DIR / "data" / "case_meta_master.pkl"
+            meta_path = BASE_DIR / "data" / "case_meta_master.pkl"
         if index_path.exists():
             index = faiss.read_index(str(index_path))
             with open(meta_path, "rb") as f:
@@ -171,7 +167,6 @@ with ci2:
         # --- NEW: user dropdown and FY/FQ/FM filters based on reportedon
         owners = get_all_owners()
         selected_user = st.selectbox("Select User", owners, index=0 if owners else None)
-
         # Filters appear AFTER user
         fy = fq = fm = None
         if selected_user:
@@ -183,33 +178,29 @@ with ci2:
             with ff3:
                 # --- FIX: Quarter selection restricts FM options to the 3 months in that quarter
                 quarter_to_fm = {
-                    "Q1": [1, 2, 3],      # Apr–Jun
-                    "Q2": [4, 5, 6],      # Jul–Sep
-                    "Q3": [7, 8, 9],      # Oct–Dec
-                    "Q4": [10, 11, 12],   # Jan–Mar
+                    "Q1": [1, 2, 3],   # Apr–Jun
+                    "Q2": [4, 5, 6],   # Jul–Sep
+                    "Q3": [7, 8, 9],   # Oct–Dec
+                    "Q4": [10, 11, 12] # Jan–Mar
                 }
                 if fq and fq != "All":
                     fm_options = ["All"] + quarter_to_fm.get(fq, list(range(1, 13)))
                 else:
                     fm_options = ["All"] + list(range(1, 13))
                 fm = st.selectbox("Financial Month (Apr=1 ... Mar=12)", fm_options)
-
-                # Optional visual hint of month names without changing values
-                if fq == "Q1":
-                    st.caption("Q1 months: Apr (1), May (2), Jun (3)")
-                elif fq == "Q2":
-                    st.caption("Q2 months: Jul (4), Aug (5), Sep (6)")
-                elif fq == "Q3":
-                    st.caption("Q3 months: Oct (7), Nov (8), Dec (9)")
-                elif fq == "Q4":
-                    st.caption("Q4 months: Jan (10), Feb (11), Mar (12)")
-
-        # Gate note
-        st.caption(":information_source: All metrics use **reported on** date and **exclude weekends**.")
-
+            # Optional visual hint of month names without changing values
+            if fq == "Q1":
+                st.caption("Q1 months: Apr (1), May (2), Jun (3)")
+            elif fq == "Q2":
+                st.caption("Q2 months: Jul (4), Aug (5), Sep (6)")
+            elif fq == "Q3":
+                st.caption("Q3 months: Oct (7), Nov (8), Dec (9)")
+            elif fq == "Q4":
+                st.caption("Q4 months: Jan (10), Feb (11), Mar (12)")
+            # Gate note
+            st.caption(":information_source: All metrics use **reported on** date and **exclude weekends**.")
         # Keep a button (same label) to avoid changing user habits / LOC
         run_clicked = st.button("Run", use_container_width=True)
-
         # keep original variable to avoid breaking dependent code (not used in new flow)
         user_id = ""
 
@@ -241,33 +232,35 @@ if run_clicked and query_mode == "General MPR Issue":
         st.error("Index not found. Please check data files.")
     else:
         with st.spinner("Searching similar past MPRs..."):
+            # 🔧 FIX: retriever now manages its own model/index; pass only the query
             results = find_similar_cases(query)
+
             results = sorted(results, key=lambda x: x.get("confidence", 0), reverse=True)
             best_conf = round(results[0].get("confidence", 0), 2) if results else 0
 
-        # --- 1. RECOMMENDED RESOLUTION (Integrated Feature)
-        recommendation_text = build_recommendation(results)
-        st.markdown(f"""
+            # --- 1. RECOMMENDED RESOLUTION (Integrated Feature)
+            recommendation_text = build_recommendation(results)
+            st.markdown(f"""
 ✅ **Recommended Solution** (Confidence: {best_conf}%)
 {recommendation_text}
-        """)
+""")
 
-        # --- 2. HISTORICAL CASES LIST
-        st.markdown('\n', unsafe_allow_html=True)
-        st.subheader("🔍 Similar Historical Cases")
-        DISPLAY_FIELDS = [
-            "caseid", "subject", "Resolution", "details",  # CSV
-            "page_content", "source", "page"               # PDF
-        ]
-        for i, r in enumerate(results, 1):
-            conf = round(r.get("confidence", 0), 2)
-            label = "🟢 Best Match" if i == 1 else ""
-            header_subject = r.get('subject') or r.get('source') or "Unknown Subject"
-            header_id = r.get('caseid') or f"Doc-{i}"
-            with st.expander(f"Case {i} {label} — {header_id} — {conf}%"):
-                for field in DISPLAY_FIELDS:
-                    if r.get(field):
-                        st.write(f"**{field.capitalize()}:** {r[field]}")
+            # --- 2. HISTORICAL CASES LIST
+            st.markdown('\n', unsafe_allow_html=True)
+            st.subheader("🔍 Similar Historical Cases")
+            DISPLAY_FIELDS = [
+                "caseid", "subject", "Resolution", "details",  # CSV
+                "page_content", "source", "page"               # PDF
+            ]
+            for i, r in enumerate(results, 1):
+                conf = round(r.get("confidence", 0), 2)
+                label = "🟢 Best Match" if i == 1 else ""
+                header_subject = r.get('subject') or r.get('source') or "Unknown Subject"
+                header_id = r.get('caseid') or f"Doc-{i}"
+                with st.expander(f"Case {i} {label} — {header_id} — {conf}%"):
+                    for field in DISPLAY_FIELDS:
+                        if r.get(field):
+                            st.write(f"**{field.capitalize()}:** {r[field]}")
 
 # ========================= # Logic: User-Specific View (NEW dropdown + filters + strict gating) # =========================
 if query_mode == "User-Specific View" and run_clicked:
@@ -291,7 +284,7 @@ if query_mode == "User-Specific View" and run_clicked:
             st.session_state.user_summary = s
             st.session_state.active_owner = s["owner"]
 
-            # ---------- RENDERING ORDER ----------
+            # ----------- RENDERING ORDER -----------
             st.markdown('\n', unsafe_allow_html=True)
             st.subheader(f"👤 User Summary — {s['owner']}")
 
@@ -342,13 +335,11 @@ if query_mode == "User-Specific View" and run_clicked:
                 total_ct = int(status_series.sum())
                 top = status_series.head(7)
                 others_ct = total_ct - int(top.sum())
-
                 labels = top.index.tolist()
                 counts = top.values.tolist()
                 if others_ct > 0:
                     labels += ["Others"]
                     counts += [others_ct]
-
                 if sum(counts) <= 0:
                     st.info("No cases available for charting.")
                 else:
@@ -370,11 +361,9 @@ if query_mode == "User-Specific View" and run_clicked:
                 active_df = filtered_df[filtered_df["closeddate"].isna()].copy()
                 if "ageing_bd" not in active_df.columns:
                     active_df = add_business_ageing(active_df)  # defensive
-
                 fresh_a = int((active_df["ageing_bd"] < 7).sum())
                 overdue_a = int(((active_df["ageing_bd"] >= 7) & (active_df["ageing_bd"] < 14)).sum())
                 critical_a = int((active_df["ageing_bd"] >= 14).sum())
-
                 aging_data = pd.DataFrame({
                     "Category": ["Fresh (<7 BD)", "Overdue (≥7 & <14 BD)", "Critical (≥14 BD)"],
                     "Cases": [fresh_a, overdue_a, critical_a]
@@ -390,32 +379,31 @@ if query_mode == "User-Specific View" and run_clicked:
                 ).properties(height=300)
                 st.altair_chart(c, use_container_width=True)
 
-                # --- FIX: add Resolution Mix (closed in the selected period)
-                st.markdown("#### Resolution Mix (Closed in period)")
-                closed_df = filtered_df[filtered_df["closeddate"].notna()].copy()
-                if not closed_df.empty and "ageing_bd" not in closed_df.columns:
-                    closed_df = add_business_ageing(closed_df)  # at closure
-
-                if closed_df.empty:
-                    st.info("No cases closed in this period.")
-                else:
-                    fresh_c = int((closed_df["ageing_bd"] < 7).sum())
-                    overdue_c = int(((closed_df["ageing_bd"] >= 7) & (closed_df["ageing_bd"] < 14)).sum())
-                    critical_c = int((closed_df["ageing_bd"] >= 14).sum())
-                    res_data = pd.DataFrame({
-                        "Category": ["Fresh (<7 BD)", "Overdue (≥7 & <14 BD)", "Critical (≥14 BD)"],
-                        "Cases": [fresh_c, overdue_c, critical_c]
-                    })
-                    rc = alt.Chart(res_data).mark_bar().encode(
-                        x=alt.X('Category', sort=["Fresh (<7 BD)", "Overdue (≥7 & <14 BD)", "Critical (≥14 BD)"]),
-                        y='Cases',
-                        color=alt.Color('Category', scale=alt.Scale(
-                            domain=["Fresh (<7 BD)", "Overdue (≥7 & <14 BD)", "Critical (≥14 BD)"],
-                            range=['#2ecc71', '#f39c12', '#e74c3c']
-                        )),
-                        tooltip=['Category', 'Cases']
-                    ).properties(height=220)
-                    st.altair_chart(rc, use_container_width=True)
+            # --- FIX: add Resolution Mix (closed in the selected period)
+            st.markdown("#### Resolution Mix (Closed in period)")
+            closed_df = filtered_df[filtered_df["closeddate"].notna()].copy()
+            if not closed_df.empty and "ageing_bd" not in closed_df.columns:
+                closed_df = add_business_ageing(closed_df)  # at closure
+            if closed_df.empty:
+                st.info("No cases closed in this period.")
+            else:
+                fresh_c = int((closed_df["ageing_bd"] < 7).sum())
+                overdue_c = int(((closed_df["ageing_bd"] >= 7) & (closed_df["ageing_bd"] < 14)).sum())
+                critical_c = int((closed_df["ageing_bd"] >= 14).sum())
+                res_data = pd.DataFrame({
+                    "Category": ["Fresh (<7 BD)", "Overdue (≥7 & <14 BD)", "Critical (≥14 BD)"],
+                    "Cases": [fresh_c, overdue_c, critical_c]
+                })
+                rc = alt.Chart(res_data).mark_bar().encode(
+                    x=alt.X('Category', sort=["Fresh (<7 BD)", "Overdue (≥7 & <14 BD)", "Critical (≥14 BD)"]),
+                    y='Cases',
+                    color=alt.Color('Category', scale=alt.Scale(
+                        domain=["Fresh (<7 BD)", "Overdue (≥7 & <14 BD)", "Critical (≥14 BD)"],
+                        range=['#2ecc71', '#f39c12', '#e74c3c']
+                    )),
+                    tooltip=['Category', 'Cases']
+                ).properties(height=220)
+                st.altair_chart(rc, use_container_width=True)
 
             # --- Latest Top 3 Resolved
             st.markdown("---")
@@ -428,15 +416,13 @@ if query_mode == "User-Specific View" and run_clicked:
                     case_id = rc.get("caseid", "NA")
                     subj = rc.get("subject", "") or rc.get("MPR_Subject", "") or ""
                     reported_on = pd.to_datetime(rc.get("reportedon", None), errors="coerce")
-                    closed_on   = pd.to_datetime(rc.get("closeddate", None), errors="coerce")
-
+                    closed_on = pd.to_datetime(rc.get("closeddate", None), errors="coerce")
                     header = f"✅ Case {case_id} \n {subj}"
                     with st.expander(header):
                         st.write(f"**Reported On:** {reported_on}")
                         st.write(f"**Closed On:** {closed_on}")
                         st.write(f"**Resolution Time:** {round(float(rc.get('resolution_days', 0)), 2)} days")
                         st.write(f"**Details:** {rc.get('details','')}")
-
                         # 1) Gantt (Reported -> Closed)
                         if pd.notnull(reported_on) and pd.notnull(closed_on):
                             gantt_df = pd.DataFrame([{
@@ -458,7 +444,6 @@ if query_mode == "User-Specific View" and run_clicked:
                             st.altair_chart(gantt, use_container_width=True)
                         else:
                             st.info("Timeline not available (missing reportedon/closeddate).")
-
                         # 2) Effort Breakdown
                         effort_df = pd.DataFrame({
                             "Effort Type": ["Configuration", "Testing", "Total"],
@@ -482,47 +467,60 @@ if query_mode == "User-Specific View" and run_clicked:
                         ).properties(height=140)
                         st.altair_chart(effort_chart, use_container_width=True)
 
-            # --- Recent Activity
-            st.markdown('\n', unsafe_allow_html=True)
-            st.subheader("🕕 Recent Activity (Last 5 Days)")
-            recent_cases = get_recent_cases(s["owner"], days=5)
-            if not recent_cases:
-                st.info("No cases reported in the last 5 days.")
-            else:
-                for ccase in recent_cases:
-                    with st.expander(f"Case {ccase['caseid']} \n {ccase.get('subject','')}"):
-                        st.write(f"Reported On: {ccase['reportedon']}")
-                        st.write(f"Status: {ccase['statuscode']}")
-                        st.write(ccase.get("details", ""))
-
-            # --- FIX: Focused Case View must include open + closed within filtered duration
+            # --- 🆕 Focused Case View (UPDATED)
             st.markdown('\n', unsafe_allow_html=True)
             st.subheader("📌 Focused Case View")
+
+            # Add two new categories: "New (≤2 BD)" and "Open (All Active)"
             case_type = st.radio(
                 "Select category",
-                ["Fresh (<7 BD)", "Overdue (≥7 & <14 BD)", "Critical (≥14 BD)"],
+                ["New (≤2 BD)", "Fresh (<7 BD)", "Overdue (≥7 & <14 BD)", "Critical (≥14 BD)", "Open (All Active)"],
                 horizontal=True
             )
+
             base_df = filtered_df.copy()
             if "ageing_bd" not in base_df.columns:
-                base_df = add_business_ageing(base_df)
+                base_df = add_business_ageing(base_df)  # ensures ageing_bd is present
 
-            if "Fresh" in case_type:
-                cdf = base_df[base_df["ageing_bd"] < 7].sort_values(by="ageing_bd", ascending=False)
-                badge = "🟢 Fresh"; empty_msg = "No fresh cases (<7 business days) found."
+            # --- Color / badge map to keep visuals consistent
+            COLOR_BADGE = {
+                "New (≤2 BD)":           ("#1abc9c",  "🟢 New"),
+                "Fresh (<7 BD)":         ("#2ecc71",  "🟢 Fresh"),
+                "Overdue (≥7 & <14 BD)": ("#f39c12",  "🟠 Overdue"),
+                "Critical (≥14 BD)":     ("#e74c3c",  "🔴 Critical"),
+                "Open (All Active)":     ("#3498db",  "🔵 Open")
+            }
+
+            # --- Build the filtered view for the selected category
+            if "New" in case_type:
+                # New = very recent active cases (≤2 business days)
+                cdf = base_df[(base_df["closeddate"].isna()) & (base_df["ageing_bd"] <= 2)] \
+                    .sort_values(by="ageing_bd", ascending=False)
+                empty_msg = "No new cases (≤2 business days) found."
+            elif "Fresh" in case_type:
+                cdf = base_df[base_df["ageing_bd"] < 7] \
+                    .sort_values(by="ageing_bd", ascending=False)
+                empty_msg = "No fresh cases (<7 business days) found."
             elif "Overdue" in case_type:
                 cdf = base_df[(base_df["ageing_bd"] >= 7) & (base_df["ageing_bd"] < 14)] \
-                      .sort_values(by="ageing_bd", ascending=False)
-                badge = "🟠 Overdue"; empty_msg = "No overdue cases (≥7 & <14 business days) found."
+                    .sort_values(by="ageing_bd", ascending=False)
+                empty_msg = "No overdue cases (≥7 & <14 business days) found."
+            elif "Critical" in case_type:
+                cdf = base_df[base_df["ageing_bd"] >= 14] \
+                    .sort_values(by="ageing_bd", ascending=False)
+                empty_msg = "No critical cases (≥14 business days) found."
             else:
-                cdf = base_df[base_df["ageing_bd"] >= 14].sort_values(by="ageing_bd", ascending=False)
-                badge = "🔴 Critical"; empty_msg = "No critical cases (≥14 business days) found."
+                # Open = all active (irrespective of ageing bucket)
+                cdf = base_df[base_df["closeddate"].isna()] \
+                    .sort_values(by="ageing_bd", ascending=False)
+                empty_msg = "No open cases found."
 
             if cdf.empty:
                 st.info(empty_msg)
             else:
+                color, badge = COLOR_BADGE.get(case_type, ("#7b2ff7", ""))
                 for _, row in cdf.head(5).iterrows():
-                    header_text = f"{badge} \n ID: {row.get('caseid')} \n {row.get('subject','No Subject')}"
+                    header_text = f"{badge}\nID: {row.get('caseid')}\n{row.get('subject','No Subject')}"
                     with st.expander(header_text):
                         st.write(f"**Aging (BD):** {row.get('ageing_bd', 0)}")
                         st.write(f"**Status:** {row.get('statuscode')}")
@@ -586,7 +584,6 @@ if query_mode == "User-Specific View" and not run_clicked and st.session_state.f
         if others_ct > 0:
             labels += ["Others"]
             counts += [others_ct]
-
         if sum(counts) <= 0:
             st.info("No cases available for charting.")
         else:
@@ -608,11 +605,9 @@ if query_mode == "User-Specific View" and not run_clicked and st.session_state.f
         active_df = filtered_df[filtered_df["closeddate"].isna()].copy()
         if "ageing_bd" not in active_df.columns:
             active_df = add_business_ageing(active_df)
-
         fresh_a = int((active_df["ageing_bd"] < 7).sum())
         overdue_a = int(((active_df["ageing_bd"] >= 7) & (active_df["ageing_bd"] < 14)).sum())
         critical_a = int((active_df["ageing_bd"] >= 14).sum())
-
         aging_data = pd.DataFrame({
             "Category": ["Fresh (<7 BD)", "Overdue (≥7 & <14 BD)", "Critical (≥14 BD)"],
             "Cases": [fresh_a, overdue_a, critical_a]
@@ -628,59 +623,80 @@ if query_mode == "User-Specific View" and not run_clicked and st.session_state.f
         ).properties(height=300)
         st.altair_chart(c, use_container_width=True)
 
-        st.markdown("#### Resolution Mix (Closed in period)")
-        closed_df = filtered_df[filtered_df["closeddate"].notna()].copy()
-        if not closed_df.empty and "ageing_bd" not in closed_df.columns:
-            closed_df = add_business_ageing(closed_df)
-        if closed_df.empty:
-            st.info("No cases closed in this period.")
-        else:
-            fresh_c = int((closed_df["ageing_bd"] < 7).sum())
-            overdue_c = int(((closed_df["ageing_bd"] >= 7) & (closed_df["ageing_bd"] < 14)).sum())
-            critical_c = int((closed_df["ageing_bd"] >= 14).sum())
-            res_data = pd.DataFrame({
-                "Category": ["Fresh (<7 BD)", "Overdue (≥7 & <14 BD)", "Critical (≥14 BD)"],
-                "Cases": [fresh_c, overdue_c, critical_c]
-            })
-            rc = alt.Chart(res_data).mark_bar().encode(
-                x=alt.X('Category', sort=["Fresh (<7 BD)", "Overdue (≥7 & <14 BD)", "Critical (≥14 BD)"]),
-                y='Cases',
-                color=alt.Color('Category', scale=alt.Scale(
-                    domain=["Fresh (<7 BD)", "Overdue (≥7 & <14 BD)", "Critical (≥14 BD)"],
-                    range=['#2ecc71', '#f39c12', '#e74c3c']
-                )),
-                tooltip=['Category', 'Cases']
-            ).properties(height=220)
-            st.altair_chart(rc, use_container_width=True)
+    st.markdown("#### Resolution Mix (Closed in period)")
+    closed_df = filtered_df[filtered_df["closeddate"].notna()].copy()
+    if not closed_df.empty and "ageing_bd" not in closed_df.columns:
+        closed_df = add_business_ageing(closed_df)
+    if closed_df.empty:
+        st.info("No cases closed in this period.")
+    else:
+        fresh_c = int((closed_df["ageing_bd"] < 7).sum())
+        overdue_c = int(((closed_df["ageing_bd"] >= 7) & (closed_df["ageing_bd"] < 14)).sum())
+        critical_c = int((closed_df["ageing_bd"] >= 14).sum())
+        res_data = pd.DataFrame({
+            "Category": ["Fresh (<7 BD)", "Overdue (≥7 & <14 BD)", "Critical (≥14 BD)"],
+            "Cases": [fresh_c, overdue_c, critical_c]
+        })
+        rc = alt.Chart(res_data).mark_bar().encode(
+            x=alt.X('Category', sort=["Fresh (<7 BD)", "Overdue (≥7 & <14 BD)", "Critical (≥14 BD)"]),
+            y='Cases',
+            color=alt.Color('Category', scale=alt.Scale(
+                domain=["Fresh (<7 BD)", "Overdue (≥7 & <14 BD)", "Critical (≥14 BD)"],
+                range=['#2ecc71', '#f39c12', '#e74c3c']
+            )),
+            tooltip=['Category', 'Cases']
+        ).properties(height=220)
+        st.altair_chart(rc, use_container_width=True)
 
-    # Focused Case View (session branch)
+    # --- 🆕 Focused Case View (UPDATED - session branch)
     st.markdown('\n', unsafe_allow_html=True)
     st.subheader("📌 Focused Case View")
+
     case_type = st.radio(
         "Select category",
-        ["Fresh (<7 BD)", "Overdue (≥7 & <14 BD)", "Critical (≥14 BD)"],
+        ["New (≤2 BD)", "Fresh (<7 BD)", "Overdue (≥7 & <14 BD)", "Critical (≥14 BD)", "Open (All Active)"],
         horizontal=True
     )
+
     base_df = filtered_df.copy()
     if "ageing_bd" not in base_df.columns:
         base_df = add_business_ageing(base_df)
 
-    if "Fresh" in case_type:
-        cdf = base_df[base_df["ageing_bd"] < 7].sort_values(by="ageing_bd", ascending=False)
-        badge = "🟢 Fresh"; empty_msg = "No fresh cases (<7 business days) found."
+    COLOR_BADGE = {
+        "New (≤2 BD)":           ("#1abc9c",  "🟢 New"),
+        "Fresh (<7 BD)":         ("#2ecc71",  "🟢 Fresh"),
+        "Overdue (≥7 & <14 BD)": ("#f39c12",  "🟠 Overdue"),
+        "Critical (≥14 BD)":     ("#e74c3c",  "🔴 Critical"),
+        "Open (All Active)":     ("#3498db",  "🔵 Open")
+    }
+
+    if "New" in case_type:
+        cdf = base_df[(base_df["closeddate"].isna()) & (base_df["ageing_bd"] <= 2)] \
+            .sort_values(by="ageing_bd", ascending=False)
+        empty_msg = "No new cases (≤2 business days) found."
+    elif "Fresh" in case_type:
+        cdf = base_df[base_df["ageing_bd"] < 7] \
+            .sort_values(by="ageing_bd", ascending=False)
+        empty_msg = "No fresh cases (<7 business days) found."
     elif "Overdue" in case_type:
         cdf = base_df[(base_df["ageing_bd"] >= 7) & (base_df["ageing_bd"] < 14)] \
-              .sort_values(by="ageing_bd", ascending=False)
-        badge = "🟠 Overdue"; empty_msg = "No overdue cases (≥7 & <14 business days) found."
+            .sort_values(by="ageing_bd", ascending=False)
+        empty_msg = "No overdue cases (≥7 & <14 business days) found."
+    elif "Critical" in case_type:
+        cdf = base_df[base_df["ageing_bd"] >= 14] \
+            .sort_values(by="ageing_bd", ascending=False)
+        empty_msg = "No critical cases (≥14 business days) found."
     else:
-        cdf = base_df[base_df["ageing_bd"] >= 14].sort_values(by="ageing_bd", ascending=False)
-        badge = "🔴 Critical"; empty_msg = "No critical cases (≥14 business days) found."
+        cdf = base_df[base_df["closeddate"].isna()] \
+            .sort_values(by="ageing_bd", ascending=False)
+        empty_msg = "No open cases found."
 
     if cdf.empty:
         st.info(empty_msg)
     else:
+        color, badge = COLOR_BADGE.get(case_type, ("#7b2ff7", ""))
         for _, row in cdf.head(5).iterrows():
-            header_text = f"{badge} \n ID: {row.get('caseid')} \n {row.get('subject','No Subject')}"
+            header_text = f"{badge}\nID: {row.get('caseid')}\n{row.get('subject','No Subject')}"
             with st.expander(header_text):
                 st.write(f"**Aging (BD):** {row.get('ageing_bd', 0)}")
                 st.write(f"**Status:** {row.get('statuscode')}")
