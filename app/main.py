@@ -98,6 +98,77 @@ def build_recommendation(results, top_n=3):
     formatted_points = [f"• {rec}" for rec in recommendations]
     return "\n".join(formatted_points)
 
+# --- Tiny UI helpers for Executive Summary visuals ---
+
+def _dot(color_hex: str, size: int = 12) -> str:
+    """Return an HTML span representing a colored dot."""
+    return f"""<span style="
+        display:inline-block; width:{size}px; height:{size}px; 
+        background:{color_hex}; border-radius:50%;
+        border:1px solid rgba(0,0,0,0.08); vertical-align:middle;
+    "></span>"""
+
+def _legend_row(label: str, dot_html: str, value: str) -> str:
+    """One line for the visuals panel (dot + label + value)."""
+    return f"""
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding:4px 6px;">
+        <div style="display:flex; align-items:center; gap:8px;">
+            {dot_html}
+            <span style="font-size:0.92rem;">{label}</span>
+        </div>
+        <span style="font-weight:600;">{value}</span>
+    </div>
+    """
+
+def _resolution_ring_chart(percent: float, color_hex: str):
+    """Small donut ring (Altair) for Resolution Rate."""
+    import altair as alt
+    import pandas as pd
+
+    pct = max(0, min(100, float(percent)))
+    data = pd.DataFrame({
+        'segment': ['filled', 'empty'],
+        'value': [pct, 100 - pct]
+    })
+    color_empty = '#E6E8EB'  # light grey
+    chart = alt.Chart(data, width=90, height=90).mark_arc(innerRadius=28).encode(
+        theta='value:Q',
+        color=alt.Color('segment:N',
+                        scale=alt.Scale(domain=['filled', 'empty'],
+                                        range=[color_hex, color_empty]),
+                        legend=None)
+    )
+    # center label
+    text = alt.Chart(pd.DataFrame({'label':[f'{pct:.0f}%']})).mark_text(
+        fontSize=14, fontWeight='bold', color='#2C3E50'
+    ).encode(text='label:N')
+    return chart + text
+
+def _rate_color(percent: float) -> str:
+    """Red/Amber/Green thresholds for resolution rate."""
+    if percent < 50:
+        return '#e74c3c'   # red
+    elif percent < 75:
+        return '#f39c12'   # amber
+    else:
+        return '#2ecc71'   # green
+
+def _trend_arrow(avg_bd: float) -> str:
+    """
+    Trend arrow based on absolute Avg Resolution Time (BD).
+    ≤3 BD: green ↘︎ (good/low), 3–7 BD: amber →, >7 BD: red ↗︎
+    """
+    try:
+        v = float(avg_bd)
+    except:
+        v = 0.0
+    if v <= 3:
+        return '<span style="color:#2ecc71;font-weight:700;">↘︎</span>'
+    elif v <= 7:
+        return '<span style="color:#f39c12;font-weight:700;">→</span>'
+    else:
+        return '<span style="color:#e74c3c;font-weight:700;">↗︎</span>'
+
 # ========================= # Sidebar # =========================
 with st.sidebar:
     if LOGO_PATH:
@@ -301,31 +372,82 @@ if query_mode == "User-Specific View" and run_clicked:
             with es_col:
                 st.markdown("### Executive Summary")
 
-                # --- Build Exec Summary table (Business Days logic)
-                # sla already computed just below, but we need it here too for the table.
+                # Business-day aware metrics
                 sla_table = compute_sla_metrics_bd(filtered_df)
 
-                # Resolved-in-period = closed within the currently filtered frame
+                # Resolved-in-period = closed within the filtered frame
                 resolved_in_period = int(filtered_df["closeddate"].notna().sum())
                 total_cases = int(s["total_cases"])
                 resolution_rate = round((resolved_in_period / total_cases) * 100, 2) if total_cases > 0 else 0.0
 
+                # Build the core table (Metric/Value) on the left
                 exec_rows = [
-                    {"Metric": "Total Cases",               "Value": total_cases,                   "Visual Representation": "Large KPI Card"},
-                    {"Metric": "Open Cases",                "Value": int(s["open_cases"]),          "Visual Representation": "Status Indicator"},
-                    {"Metric": "Overdue (≥7 BD)",           "Value": int(sla_table["overdue_active"]),  "Visual Representation": "Status Indicator"},
-                    {"Metric": "Critical (≥14 BD)",         "Value": int(sla_table["critical_active"]), "Visual Representation": "Status Indicator"},
-                    {"Metric": "Awaiting Input (>2 BD)",    "Value": int(sla_table["awaiting_input"]),   "Visual Representation": "Status Indicator"},
-                    {"Metric": "Resolution Rate (%)",       "Value": resolution_rate,               "Visual Representation": "Circular Progress Ring"},
-                    {"Metric": "Avg Resolution Time (BD)",  "Value": float(sla_table["avg_resolution"]), "Visual Representation": "Trend Arrow"},
+                    {"Metric": "Total Cases",               "Value": total_cases},
+                    {"Metric": "Open Cases",                "Value": int(s["open_cases"])},
+                    {"Metric": "Overdue (≥7 BD)",           "Value": int(sla_table["overdue_active"])},
+                    {"Metric": "Critical (≥14 BD)",         "Value": int(sla_table["critical_active"])},
+                    {"Metric": "Awaiting Input (>2 BD)",    "Value": int(sla_table["awaiting_input"])},
+                    {"Metric": "Resolution Rate (%)",       "Value": resolution_rate},
+                    {"Metric": "Avg Resolution Time (BD)",  "Value": float(sla_table["avg_resolution"])},
                 ]
-                es_df = pd.DataFrame(exec_rows, columns=["Metric", "Value", "Visual Representation"])
+                es_df = pd.DataFrame(exec_rows, columns=["Metric", "Value"])
 
-                st.dataframe(
-                    es_df,
-                    use_container_width=True
-                )
+                tcol, vcol = st.columns([2, 1])
+                with tcol:
+                    st.dataframe(es_df, use_container_width=True)
+
+                # Visuals panel on the right
+                with vcol:
+                    st.markdown("#### Visuals", help="All visuals computed on business days (weekends excluded).")
+
+                    # Colored dots for status-like metrics
+                    open_ct      = int(s["open_cases"])
+                    overdue_ct   = int(sla_table["overdue_active"])
+                    critical_ct  = int(sla_table["critical_active"])
+                    awaiting_ct  = int(sla_table["awaiting_input"])
+
+                    # Open: amber if >0 and <5% of total; red if ≥5%; green if 0
+                    open_ratio = (open_ct / total_cases) if total_cases > 0 else 0
+                    if open_ct == 0:
+                        open_color = '#2ecc71'  # green
+                    elif open_ratio < 0.05:
+                        open_color = '#f39c12'  # amber
+                    else:
+                        open_color = '#e74c3c'  # red
+
+                    overdue_color  = '#2ecc71' if overdue_ct == 0  else '#f39c12'   # green else amber
+                    critical_color = '#2ecc71' if critical_ct == 0 else '#e74c3c'   # green else red
+                    await_color    = '#2ecc71' if awaiting_ct == 0 else '#e74c3c'   # green else red
+
+                    dot_open     = _dot(open_color)
+                    dot_overdue  = _dot(overdue_color)
+                    dot_critical = _dot(critical_color)
+                    dot_await    = _dot(await_color)
+
+                    html = ""
+                    html += _legend_row("Open Cases",              dot_open,     f"{open_ct}")
+                    html += _legend_row("Overdue (≥7 BD)",         dot_overdue,  f"{overdue_ct}")
+                    html += _legend_row("Critical (≥14 BD)",       dot_critical, f"{critical_ct}")
+                    html += _legend_row("Awaiting Input (>2 BD)",  dot_await,    f"{awaiting_ct}")
+
+                    st.markdown(f"""
+                    <div style="border:1px solid #EEF0F3; border-radius:8px; background:#FFF; padding:6px;">
+                        {html}
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    # Resolution Rate donut ring
+                    rate_color = _rate_color(resolution_rate)
+                    ring = _resolution_ring_chart(resolution_rate, rate_color)
+                    st.markdown("##### Resolution Rate")
+                    st.altair_chart(ring, use_container_width=False)
+
+                    # Avg Resolution Time (BD) trend arrow
+                    st.markdown("##### Avg Resolution Time (BD)")
+                    st.markdown(_trend_arrow(sla_table["avg_resolution"]), unsafe_allow_html=True)
+
                 st.caption("All metrics calculated on **business days** (weekends excluded).")
+
             with sla_col:
                 st.markdown("### SLA Metrics")
                 sla = compute_sla_metrics_bd(filtered_df)
@@ -573,20 +695,59 @@ if query_mode == "User-Specific View" and not run_clicked and st.session_state.f
         resolution_rate = round((resolved_in_period / total_cases) * 100, 2) if total_cases > 0 else 0.0
 
         exec_rows = [
-            {"Metric": "Total Cases",               "Value": total_cases,                   "Visual Representation": "Large KPI Card"},
-            {"Metric": "Open Cases",                "Value": int(s["open_cases"]),          "Visual Representation": "Status Indicator"},
-            {"Metric": "Overdue (≥7 BD)",           "Value": int(sla_table["overdue_active"]),  "Visual Representation": "Status Indicator"},
-            {"Metric": "Critical (≥14 BD)",         "Value": int(sla_table["critical_active"]), "Visual Representation": "Status Indicator"},
-            {"Metric": "Awaiting Input (>2 BD)",    "Value": int(sla_table["awaiting_input"]),   "Visual Representation": "Status Indicator"},
-            {"Metric": "Resolution Rate (%)",       "Value": resolution_rate,               "Visual Representation": "Circular Progress Ring"},
-            {"Metric": "Avg Resolution Time (BD)",  "Value": float(sla_table["avg_resolution"]), "Visual Representation": "Trend Arrow"},
+            {"Metric": "Total Cases",               "Value": total_cases},
+            {"Metric": "Open Cases",                "Value": int(s["open_cases"])},
+            {"Metric": "Overdue (≥7 BD)",           "Value": int(sla_table["overdue_active"])},
+            {"Metric": "Critical (≥14 BD)",         "Value": int(sla_table["critical_active"])},
+            {"Metric": "Awaiting Input (>2 BD)",    "Value": int(sla_table["awaiting_input"])},
+            {"Metric": "Resolution Rate (%)",       "Value": resolution_rate},
+            {"Metric": "Avg Resolution Time (BD)",  "Value": float(sla_table["avg_resolution"])},
         ]
-        es_df = pd.DataFrame(exec_rows, columns=["Metric", "Value", "Visual Representation"])
+        es_df = pd.DataFrame(exec_rows, columns=["Metric", "Value"])
 
-        st.dataframe(
-            es_df,
-            use_container_width=True
-        )
+        tcol, vcol = st.columns([2, 1])
+        with tcol:
+            st.dataframe(es_df, use_container_width=True)
+
+        with vcol:
+            st.markdown("#### Visuals", help="All visuals computed on business days (weekends excluded).")
+
+            open_ct      = int(s["open_cases"])
+            overdue_ct   = int(sla_table["overdue_active"])
+            critical_ct  = int(sla_table["critical_active"])
+            awaiting_ct  = int(sla_table["awaiting_input"])
+
+            open_ratio = (open_ct / total_cases) if total_cases > 0 else 0
+            if open_ct == 0:
+                open_color = '#2ecc71'
+            elif open_ratio < 0.05:
+                open_color = '#f39c12'
+            else:
+                open_color = '#e74c3c'
+
+            overdue_color  = '#2ecc71' if overdue_ct == 0  else '#f39c12'
+            critical_color = '#2ecc71' if critical_ct == 0 else '#e74c3c'
+            await_color    = '#2ecc71' if awaiting_ct == 0 else '#e74c3c'
+
+            html = ""
+            html += _legend_row("Open Cases",              _dot(open_color),     f"{open_ct}")
+            html += _legend_row("Overdue (≥7 BD)",         _dot(overdue_color),  f"{overdue_ct}")
+            html += _legend_row("Critical (≥14 BD)",       _dot(critical_color), f"{critical_ct}")
+            html += _legend_row("Awaiting Input (>2 BD)",  _dot(await_color),    f"{awaiting_ct}")
+
+            st.markdown(f"""
+            <div style="border:1px solid #EEF0F3; border-radius:8px; background:#FFF; padding:6px;">
+                {html}
+            </div>
+            """, unsafe_allow_html=True)
+
+            rate_color = _rate_color(resolution_rate)
+            st.markdown("##### Resolution Rate")
+            st.altair_chart(_resolution_ring_chart(resolution_rate, rate_color), use_container_width=False)
+
+            st.markdown("##### Avg Resolution Time (BD)")
+            st.markdown(_trend_arrow(sla_table["avg_resolution"]), unsafe_allow_html=True)
+
         st.caption("All metrics calculated on **business days** (weekends excluded).")
 
     with sla_col:
