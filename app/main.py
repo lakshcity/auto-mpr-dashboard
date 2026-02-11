@@ -241,7 +241,7 @@ if run_clicked and query_mode == "General MPR Issue":
         st.error("Index not found. Please check data files.")
     else:
         with st.spinner("Searching similar past MPRs..."):
-            results = find_similar_cases(query, model, index, metadata)
+            results = find_similar_cases(query)
             results = sorted(results, key=lambda x: x.get("confidence", 0), reverse=True)
             best_conf = round(results[0].get("confidence", 0), 2) if results else 0
 
