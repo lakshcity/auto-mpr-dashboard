@@ -44,12 +44,15 @@ from services.user_insights import (
     add_business_ageing
 )
 
+from services.retriever import search_redash_mpr
+from services.agent import pdf_agent
+
+
 # ========================= # Imports # =========================
 import streamlit as st
 import pickle
 import faiss
 from sentence_transformers import SentenceTransformer
-from services.retriever import find_similar_cases
 import pandas as pd
 import matplotlib.pyplot as plt
 import altair as alt
@@ -152,6 +155,31 @@ def _rate_color(percent: float) -> str:
         return '#f39c12'   # amber
     else:
         return '#2ecc71'   # green
+
+def render_confidence_bar(score):
+
+    color = ""
+    if score < 20:
+        color = "#d9534f"  # red
+    elif score < 40:
+        color = "#f0ad4e"  # orange
+    elif score < 60:
+        color = "#ffd700"  # yellow
+    elif score < 80:
+        color = "#5bc0de"  # light blue
+    else:
+        color = "#5cb85c"  # green
+
+    st.markdown(
+        f"""
+        <div style='background:#eee;width:100%;height:18px;border-radius:4px;'>
+            <div style='width:{score}%;background:{color};height:18px;border-radius:4px;'></div>
+        </div>
+        <p style='font-size:12px;'>Confidence: {score}%</p>
+        """,
+        unsafe_allow_html=True
+    )
+
 
 # --- Add near your other helpers ---
 import streamlit.components.v1 as components
@@ -352,43 +380,88 @@ if st.session_state.last_query_mode != query_mode:
     st.session_state.filtered_df = None
     st.session_state.last_query_mode = query_mode
 
-# ========================= # Logic: General Search (INTEGRATED PDF/CSV LOGIC) # =========================
+# =========================
+# Logic: General Search (CLEAN HYBRID FLOW)
+# =========================
+
 if run_clicked and query_mode == "General MPR Issue":
+
     if not query.strip():
         st.warning("Please enter an MPR issue.")
+
     elif index is None:
         st.error("Index not found. Please check data files.")
+
     else:
         with st.spinner("Searching similar past MPRs..."):
-            # 🔧 FIX: retriever now manages its own model/index; pass only the query
-            results = find_similar_cases(query)
+            results = search_redash_mpr(query)
 
+        if not results:
+            st.warning("No similar MPR subjects found in Redash.")
+            st.session_state.pop("similar_results", None)
+            st.session_state.pop("recommendation_text", None)
+
+        else:
+            # Sort by confidence once
             results = sorted(results, key=lambda x: x.get("confidence", 0), reverse=True)
-            best_conf = round(results[0].get("confidence", 0), 2) if results else 0
 
-            # --- 1. RECOMMENDED RESOLUTION (Integrated Feature)
-            recommendation_text = build_recommendation(results)
-            st.markdown(f"""
-✅ **Recommended Solution** (Confidence: {best_conf}%)
-{recommendation_text}
-""")
+            # Store results in session
+            st.session_state["similar_results"] = results
+            st.session_state["last_query"] = query
 
-            # --- 2. HISTORICAL CASES LIST
-            st.markdown('\n', unsafe_allow_html=True)
-            st.subheader("🔍 Similar Historical Cases")
-            DISPLAY_FIELDS = [
-                "caseid", "subject", "Resolution", "details",  # CSV
-                "page_content", "source", "page"               # PDF
-            ]
-            for i, r in enumerate(results, 1):
-                conf = round(r.get("confidence", 0), 2)
-                label = "🟢 Best Match" if i == 1 else ""
-                header_subject = r.get('subject') or r.get('source') or "Unknown Subject"
-                header_id = r.get('caseid') or f"Doc-{i}"
-                with st.expander(f"Case {i} {label} — {header_id} — {conf}%"):
-                    for field in DISPLAY_FIELDS:
-                        if r.get(field):
-                            st.write(f"**{field.capitalize()}:** {r[field]}")
+            # Clear previous recommendation when new search happens
+            st.session_state.pop("recommendation_text", None)
+
+
+# =========================
+# DISPLAY SIMILAR RESULTS (ONLY ONCE)
+# =========================
+
+if query_mode == "General MPR Issue" and "similar_results" in st.session_state:
+
+    results = st.session_state["similar_results"]
+
+    st.subheader("🔍 Similar Historical Cases")
+
+    for i, r in enumerate(results, 1):
+
+        conf = round(r.get("confidence", 0), 2)
+        header_subject = r.get("mpr_subject") or "Unknown Subject"
+        header_id = r.get("caseid") or f"Doc-{i}"
+
+        with st.expander(f"Case {i} — {header_id} — {conf}%"):
+            render_confidence_bar(conf)
+
+            st.write(f"**Subject:** {header_subject}")
+            if r.get("statuscode"):
+                st.write(f"**Status:** {r.get('statuscode')}")
+            if r.get("reportedon"):
+                st.write(f"**Reported On:** {r.get('reportedon')}")
+
+    # -------------------------
+    # Recommendation Button
+    # -------------------------
+    if st.button("🚀 Get Recommendation"):
+
+        best_subject = results[0].get("mpr_subject", "")
+
+        with st.spinner("Generating recommendation..."):
+            try:
+                recommendation_text = pdf_agent(best_subject)
+                st.session_state["recommendation_text"] = recommendation_text
+            except Exception as e:
+                st.session_state["recommendation_text"] = f"PDF RAG Error: {str(e)}"
+
+
+# =========================
+# DISPLAY RECOMMENDATION (PERSISTENT)
+# =========================
+
+if query_mode == "General MPR Issue" and "recommendation_text" in st.session_state:
+
+    st.markdown("### ✅ Recommended Solution")
+    st.markdown(st.session_state["recommendation_text"])
+
 
 # ========================= # Logic: User-Specific View (NEW dropdown + filters + strict gating) # =========================
 if query_mode == "User-Specific View" and run_clicked:

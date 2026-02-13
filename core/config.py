@@ -16,16 +16,15 @@ PDF_DIR = DATA_DIR / "pdfs"
 PDF_INDEX = DATA_DIR / "pdf_index.faiss"
 PDF_META = DATA_DIR / "pdf_meta.pkl"
 PDF_REGISTRY = DATA_DIR / "index_registry.json"
-
 # ---------------------------
 # Models & Retrieval config
 # ---------------------------
 EMBED_MODEL = os.getenv("EMBED_MODEL", "all-MiniLM-L6-v2")
 
 # LLM (generation only, NOT embeddings)
-OLLAMA_MODEL = os.getenv("OLLAMA_LLM_MODEL", "llama3.1:8b")
+OLLAMA_MODEL = os.getenv("OLLAMA_LLM_MODEL", "llama3.2:3b")
 
-TOP_K = int(os.getenv("TOP_K", "3"))
+TOP_K = int(os.getenv("TOP_K", "2"))
 
 # ---------------------------
 # Safety logs (optional but useful)

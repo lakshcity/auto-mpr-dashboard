@@ -1,150 +1,105 @@
-﻿import json
-import sys
-import hashlib
+import time
 import pickle
-from datetime import datetime
 from pathlib import Path
-
-import fitz  # PyMuPDF
 import faiss
 import numpy as np
 from sentence_transformers import SentenceTransformer
-
-# --- FIX: Add project root to system path ---
-# This allows python to find 'core' even when running from 'services/'
-current_file = Path(__file__).resolve()
-project_root = current_file.parent.parent
-sys.path.append(str(project_root))
-# --------------------------------------------
-
-from core.config import (
-    PDF_DIR,
-    PDF_INDEX,
-    PDF_META,
-    PDF_REGISTRY,
-    EMBED_MODEL
-)
-
-# ---------------------------
-# Load Embedding Model
-# ---------------------------
-model = SentenceTransformer(EMBED_MODEL)
-print(f"Embedding model loaded: {EMBED_MODEL}")
-  # should be all-MiniLM-L6-v2
+from pypdf import PdfReader
 
 
-# ---------------------------
-# Helpers
-# ---------------------------
-def file_hash(path: Path) -> str:
-    h = hashlib.md5()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(4096), b""):
-            h.update(chunk)
-    return h.hexdigest()
+BASE_DIR = Path(__file__).resolve().parents[1]
+PDF_DIR = BASE_DIR / "data" / "pdfs"
+INDEX_PATH = BASE_DIR / "data" / "pdf_index.faiss"
+META_PATH = BASE_DIR / "data" / "pdf_meta.pkl"
+
+CHUNK_SIZE = 500  # words
+CHUNK_OVERLAP = 100
 
 
-def load_registry():
-    if PDF_REGISTRY.exists():
-        return json.loads(PDF_REGISTRY.read_text())
-    return {"indexed_files": {}}
+# -----------------------------------
+# Text Chunking
+# -----------------------------------
+def chunk_text(text, chunk_size=CHUNK_SIZE, overlap=CHUNK_OVERLAP):
+    words = text.split()
+    chunks = []
+
+    for i in range(0, len(words), chunk_size - overlap):
+        chunk = words[i:i + chunk_size]
+        if len(chunk) > 50:  # avoid tiny fragments
+            chunks.append(" ".join(chunk))
+
+    return chunks
 
 
-def save_registry(registry):
-    PDF_REGISTRY.write_text(json.dumps(registry, indent=2))
+# -----------------------------------
+# PDF Loader with Chunking
+# -----------------------------------
+def load_and_chunk_pdfs(pdf_dir: Path):
+    docs = []
+
+    for pdf_file in pdf_dir.glob("*.pdf"):
+        reader = PdfReader(pdf_file)
+        full_text = ""
+
+        for page in reader.pages:
+            page_text = page.extract_text()
+            if page_text:
+                full_text += page_text + "\n"
+
+        if full_text.strip():
+            chunks = chunk_text(full_text)
+
+            for idx, chunk in enumerate(chunks):
+                docs.append({
+                    "source": pdf_file.name,
+                    "chunk_id": idx,
+                    "text": chunk
+                })
+
+    if not docs:
+        raise RuntimeError("No valid PDFs found")
+
+    return docs
 
 
-def extract_text_chunks(pdf_path: Path, chunk_size=500):
-    doc = fitz.open(pdf_path)
-    full_text = []
+# -----------------------------------
+# Index Builder
+# -----------------------------------
+def build_pdf_index():
+    print("=== CHUNKED PDF INDEX BUILD STARTED ===")
+    start = time.time()
 
-    for page in doc:
-        text = page.get_text()
-        if text:
-            full_text.append(text)
+    if not PDF_DIR.exists():
+        raise FileNotFoundError(f"PDF folder not found: {PDF_DIR}")
 
-    words = " ".join(full_text).split()
+    print("Loading and chunking PDFs...")
+    docs = load_and_chunk_pdfs(PDF_DIR)
+    texts = [d["text"] for d in docs]
 
-    return [
-        " ".join(words[i:i + chunk_size])
-        for i in range(0, len(words), chunk_size)
-        if len(words[i:i + chunk_size]) > 20
-    ]
+    print("Loading embedding model...")
+    model = SentenceTransformer("all-MiniLM-L6-v2")
 
+    print("Encoding chunks...")
+    embeddings = model.encode(
+        texts,
+        show_progress_bar=True,
+        convert_to_numpy=True,
+        batch_size=32
+    ).astype("float32")
 
-# ---------------------------
-# Incremental Index Builder
-# ---------------------------
-def incremental_index():
+    print("Building FAISS index...")
+    index = faiss.IndexFlatL2(embeddings.shape[1])
+    index.add(embeddings)
 
-    registry = load_registry()
-    indexed_files = registry["indexed_files"]
+    faiss.write_index(index, str(INDEX_PATH))
 
-    new_files = []
+    with open(META_PATH, "wb") as f:
+        pickle.dump(docs, f)
 
-    for pdf in PDF_DIR.glob("*.pdf"):
-        h = file_hash(pdf)
-
-        if pdf.name not in indexed_files or indexed_files[pdf.name]["hash"] != h:
-            new_files.append((pdf, h))
-
-    if not new_files:
-        print("No new or modified PDFs found")
-        return
-
-    # Load or create index
-    if PDF_INDEX.exists() and PDF_META.exists():
-        index = faiss.read_index(str(PDF_INDEX))
-        with open(PDF_META, "rb") as f:
-            metadata = pickle.load(f)
-    else:
-        index = faiss.IndexFlatL2(384)  # MiniLM = 384 dims
-        metadata = []
-
-    for pdf, h in new_files:
-
-        print(f"Processing PDF: {pdf.name}")
-
-        chunks = extract_text_chunks(pdf)
-
-        if not chunks:
-            print(f"⚠️ No text extracted from {pdf.name}")
-            continue
-
-        vectors = model.encode(
-            chunks,
-            normalize_embeddings=True,
-            batch_size=32,
-            show_progress_bar=True
-        ).astype("float32")
-
-        index.add(vectors)
-
-        for chunk in chunks:
-            metadata.append({
-                "text": chunk,
-                "source": pdf.name
-            })
-
-        registry["indexed_files"][pdf.name] = {
-            "hash": h,
-            "indexed_at": datetime.utcnow().isoformat()
-        }
-
-    # Save artifacts
-    faiss.write_index(index, str(PDF_INDEX))
-    with open(PDF_META, "wb") as f:
-        pickle.dump(metadata, f)
-
-    save_registry(registry)
-
-    print("✅ PDF indexing completed successfully")
-    print(f"FAISS index size: {index.ntotal}")
-    print(f"FAISS dimension: {index.d}")
+    print(f"✅ Chunked PDF index built")
+    print(f"Total chunks: {len(docs)}")
+    print(f"⏱ Time: {round(time.time() - start, 2)} sec")
 
 
-# ---------------------------
-# Run directly
-# ---------------------------
 if __name__ == "__main__":
-    incremental_index()
+    build_pdf_index()
