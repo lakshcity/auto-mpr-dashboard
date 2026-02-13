@@ -1,56 +1,37 @@
-from services.retriever import retrieve_context
 import requests
-from core.config import OLLAMA_MODEL
+import streamlit as st
+from services.retriever import retrieve_context
+
+# -------------------------
+# ENVIRONMENT DETECTION
+# -------------------------
+
+IS_CLOUD = "GROQ_API_KEY" in st.secrets
+
+# -------------------------
+# LOCAL OLLAMA SETTINGS
+# -------------------------
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
+OLLAMA_MODEL = "llama3.2:3b"
 
-SIMILARITY_THRESHOLD = 0.75  # deterministic fast-path threshold
+# -------------------------
+# CLOUD GROQ SETTINGS
+# -------------------------
 
-
-def format_steps_directly(context: str):
-    """
-    Deterministic fast path.
-    Extract lines that look like steps.
-    """
-    lines = context.split("\n")
-    steps = []
-
-    for line in lines:
-        line = line.strip()
-        if line.startswith(("1.", "2.", "3.", "4.", "5.", "6.", "7.", "8.")):
-            steps.append(line)
-        elif line.lower().startswith(("click", "navigate", "select", "log")):
-            steps.append(line)
-
-        if len(steps) >= 6:
-            break
-
-    if not steps:
-        return None
-
-    return "\n".join(f"- {s}" for s in steps)
+if IS_CLOUD:
+    from groq import Groq
+    groq_client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+    GROQ_MODEL = "llama-3.1-8b-instant"
 
 
 def pdf_agent(question: str):
 
-    context, scores = retrieve_context(question, return_scores=True)
+    context = retrieve_context(question)
 
     if not context:
         return "Not found in documents."
 
-    max_score = max(scores) if scores else 0
-
-    # ------------------------------------------------
-    # 🚀 FAST DETERMINISTIC PATH
-    # ------------------------------------------------
-    if max_score >= SIMILARITY_THRESHOLD:
-        formatted = format_steps_directly(context)
-        if formatted:
-            return formatted
-
-    # ------------------------------------------------
-    # 🧠 LIGHT LLM FALLBACK
-    # ------------------------------------------------
     prompt = f"""
 You are an internal BusinessNext support assistant.
 
@@ -68,19 +49,47 @@ Question:
 Answer:
 """
 
-    res = requests.post(
-        OLLAMA_URL,
-        json={
-            "model": OLLAMA_MODEL,
-            "prompt": prompt,
-            "stream": False,
-            "options": {
-                "temperature": 0.1,
-                "num_predict": 120
-            }
-        },
-        timeout=60
-    )
+    # -------------------------
+    # CLOUD MODE (Groq)
+    # -------------------------
+    if IS_CLOUD:
+        try:
+            completion = groq_client.chat.completions.create(
+                model=GROQ_MODEL,
+                messages=[
+                    {"role": "system", "content": "You are a helpful enterprise assistant."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.1,
+                max_tokens=200
+            )
 
-    res.raise_for_status()
-    return res.json()["response"]
+            return completion.choices[0].message.content
+
+        except Exception as e:
+            return f"Groq API error: {str(e)}"
+
+    # -------------------------
+    # LOCAL MODE (Ollama)
+    # -------------------------
+    else:
+        try:
+            res = requests.post(
+                OLLAMA_URL,
+                json={
+                    "model": OLLAMA_MODEL,
+                    "prompt": prompt,
+                    "stream": False,
+                    "options": {
+                        "temperature": 0.1,
+                        "num_predict": 120
+                    }
+                },
+                timeout=60
+            )
+
+            res.raise_for_status()
+            return res.json()["response"]
+
+        except Exception:
+            return "LLM service unavailable. Please ensure Ollama is running locally."
