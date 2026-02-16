@@ -46,7 +46,13 @@ from services.user_insights import (
 
 from services.retriever import search_redash_mpr
 from services.agent import pdf_agent
-from services.feedback_manager import save_feedback,get_subject_success_rate
+from services.feedback_manager import (
+    save_feedback,
+    get_subject_success_rate,
+    get_reward_trend,
+    get_subject_feedback_count
+)
+
 
 
 # ========================= # Imports # =========================
@@ -427,7 +433,8 @@ if query_mode == "General MPR Issue" and "similar_results" in st.session_state:
 
     for i, r in enumerate(results, 1):
 
-        conf = round(r.get("confidence", 0), 2)
+        conf = round(r.get("composite_confidence", r.get("confidence", 0)),2    )
+
         header_subject = r.get("mpr_subject") or "Unknown Subject"
         header_id = r.get("caseid") or f"Doc-{i}"
 
@@ -507,6 +514,21 @@ if query_mode == "General MPR Issue" and "recommendation_text" in st.session_sta
 
         if "adaptive_score" in results[0]:
             st.write(f"Adaptive Score Used: {results[0]['adaptive_score']}")
+
+    from services.feedback_manager import get_reward_trend
+
+    trend_df = get_reward_trend()
+
+    if len(trend_df) < 3:
+        st.info("Performance trend will appear after more feedback submissions.")
+    elif not trend_df.empty:
+        chart = alt.Chart(trend_df).mark_line().encode(
+            x="timestamp:T",
+            y="rolling_avg:Q"
+        )
+
+        st.altair_chart(chart, use_container_width=True)
+
 
 
     st.markdown("### 📝 Rate This Recommendation")

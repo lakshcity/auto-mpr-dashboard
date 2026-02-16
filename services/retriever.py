@@ -108,9 +108,35 @@ def search_redash_mpr(query, top_k=5):
 
     if not keyword_df.empty:
         results = keyword_df.head(top_k).to_dict("records")
+
+        enhanced_results = []
+
         for r in results:
             r["confidence"] = 95
-        return results
+
+            subject = r.get("mpr_subject", "")
+            success_rate = get_subject_success_rate(subject)
+            reward_scaled = success_rate * 20
+
+            adaptive_score = (
+                0.7 * r["confidence"] +
+                0.3 * reward_scaled
+            )
+
+            if success_rate < 1.5:
+                adaptive_score*= 0.8
+
+            composite_confidence = (
+                0.6 * r["confidence"] +
+                0.4 * reward_scaled
+            )
+
+            r["adaptive_score"] = round(adaptive_score, 2)
+            r["composite_confidence"] = round(composite_confidence, 2)
+
+            enhanced_results.append(r)
+
+        return enhanced_results
 
     # ---------------------------------------
     # 2️⃣ SEMANTIC MATCH (LAZY BUILD)
@@ -169,7 +195,23 @@ def search_redash_mpr(query, top_k=5):
             0.3 * reward_scaled
         )
 
+        # ---------------------------------------
+        # 🔥 Penalty Memory Layer
+        # ---------------------------------------
+        if success_rate < 1.5:
+            final_score *= 0.8   # reduce score by 20%
+
         row["adaptive_score"] = round(final_score, 2)
+
+
+        # Composite confidence for UI display
+        composite_confidence = (
+            0.6 * row["confidence"] +
+            0.4 * reward_scaled
+        )
+
+        row["composite_confidence"] = round(composite_confidence, 2)
+
 
         results.append(row)
 

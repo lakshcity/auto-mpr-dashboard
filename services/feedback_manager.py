@@ -18,17 +18,12 @@ REQUIRED_COLUMNS = [
 
 
 def _initialize_file():
-    """Create feedback file if it doesn't exist."""
     if not os.path.exists(FEEDBACK_FILE):
         df = pd.DataFrame(columns=REQUIRED_COLUMNS)
         df.to_csv(FEEDBACK_FILE, index=False)
 
 
 def compute_reward(row):
-    """
-    Weighted reward formula.
-    Adjust weights later if needed.
-    """
     match_score = 1 if row["match_accuracy"] == "Yes" else 0
     applicability_score = {
         "Immediate": 1,
@@ -48,9 +43,6 @@ def compute_reward(row):
 
 
 def save_feedback(data: dict):
-    """
-    Save structured feedback entry.
-    """
     _initialize_file()
 
     data["timestamp"] = datetime.utcnow()
@@ -66,9 +58,6 @@ def save_feedback(data: dict):
 
 
 def get_subject_success_rate(mpr_subject):
-    """
-    Average reward score for a subject.
-    """
     if not os.path.exists(FEEDBACK_FILE):
         return 0.0
 
@@ -81,10 +70,15 @@ def get_subject_success_rate(mpr_subject):
     return round(subject_df["final_reward"].mean(), 3)
 
 
+def get_subject_feedback_count(mpr_subject):
+    if not os.path.exists(FEEDBACK_FILE):
+        return 0
+
+    df = pd.read_csv(FEEDBACK_FILE)
+    return len(df[df["mpr_subject"] == mpr_subject])
+
+
 def get_feedback_stats():
-    """
-    Global feedback insights.
-    """
     if not os.path.exists(FEEDBACK_FILE):
         return {}
 
@@ -99,3 +93,18 @@ def get_feedback_stats():
                            .head(5)
                            .to_dict()
     }
+
+
+def get_reward_trend():
+    if not os.path.exists(FEEDBACK_FILE):
+        return pd.DataFrame()
+
+    df = pd.read_csv(FEEDBACK_FILE)
+    df["timestamp"] = pd.to_datetime(df["timestamp"])
+    df = df.sort_values("timestamp")
+
+    window_size = min(10, len(df))
+    df["rolling_avg"] = df["final_reward"].rolling(window=window_size).mean()
+
+
+    return df
