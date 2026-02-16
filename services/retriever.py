@@ -9,6 +9,7 @@ from pathlib import Path
 from sentence_transformers import SentenceTransformer
 
 from core.config import PDF_INDEX, PDF_META, EMBED_MODEL, TOP_K
+from services.feedback_manager import get_subject_success_rate
 
 # =====================================================
 # 🔹 1️⃣ LOAD PDF RAG RESOURCES (FOR RECOMMENDATION)
@@ -153,7 +154,25 @@ def search_redash_mpr(query, top_k=5):
             confidence = round(normalized * 100, 2)
 
         row["confidence"] = round(confidence, 2)
+
+        # ---------------------------------------
+        # 🔥 Adaptive Learning Layer
+        # ---------------------------------------
+        subject = row.get("mpr_subject", "")
+        success_rate = get_subject_success_rate(subject)
+
+        # Scale reward (0–5) to 0–100 range
+        reward_scaled = success_rate * 20
+
+        final_score = (
+            0.7 * row["confidence"] +
+            0.3 * reward_scaled
+        )
+
+        row["adaptive_score"] = round(final_score, 2)
+
         results.append(row)
+
 
     return results
 

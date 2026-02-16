@@ -46,6 +46,7 @@ from services.user_insights import (
 
 from services.retriever import search_redash_mpr
 from services.agent import pdf_agent
+from services.feedback_manager import save_feedback,get_subject_success_rate
 
 
 # ========================= # Imports # =========================
@@ -403,7 +404,8 @@ if run_clicked and query_mode == "General MPR Issue":
 
         else:
             # Sort by confidence once
-            results = sorted(results, key=lambda x: x.get("confidence", 0), reverse=True)
+            results = sorted(results,key=lambda x: x.get("adaptive_score", x.get("confidence", 0)),reverse=True)
+
 
             # Store results in session
             st.session_state["similar_results"] = results
@@ -438,6 +440,25 @@ if query_mode == "General MPR Issue" and "similar_results" in st.session_state:
             if r.get("reportedon"):
                 st.write(f"**Reported On:** {r.get('reportedon')}")
 
+    import pandas as pd
+    import altair as alt
+
+    scores = [r.get("confidence", 0) for r in results]
+
+    df_scores = pd.DataFrame({
+        "Case Rank": range(1, len(scores) + 1),
+        "Similarity": scores
+    })
+
+    chart = alt.Chart(df_scores).mark_bar().encode(
+        x="Case Rank:O",
+        y="Similarity:Q"
+    )
+
+    st.markdown("### 📊 Similarity Distribution")
+    st.altair_chart(chart, use_container_width=True)
+
+
     # -------------------------
     # Recommendation Button
     # -------------------------
@@ -460,7 +481,65 @@ if query_mode == "General MPR Issue" and "similar_results" in st.session_state:
 if query_mode == "General MPR Issue" and "recommendation_text" in st.session_state:
 
     st.markdown("### ✅ Recommended Solution")
+    from services.feedback_manager import get_subject_success_rate
+
+    best_subject = st.session_state["similar_results"][0].get("mpr_subject", "")
+    success_rate = get_subject_success_rate(best_subject)
+
+    if success_rate >= 4:
+        badge = "🟢 High Reliability"
+    elif success_rate >= 2.5:
+        badge = "🟡 Moderate Confidence"
+    else:
+        badge = "🔴 Needs Review"
+
+    st.markdown(f"**Reliability:** {badge}")
+
     st.markdown(st.session_state["recommendation_text"])
+
+    with st.expander("🔍 Why was this recommended?"):
+
+        results = st.session_state["similar_results"]
+
+        st.write(f"Top Similar Cases Considered: {len(results)}")
+        st.write(f"Top Case Similarity: {results[0].get('confidence', 0)}%")
+        st.write(f"Historical Success Score: {round(success_rate, 2)} / 5")
+
+        if "adaptive_score" in results[0]:
+            st.write(f"Adaptive Score Used: {results[0]['adaptive_score']}")
+
+
+    st.markdown("### 📝 Rate This Recommendation")
+
+    with st.form("feedback_form"):
+
+        quality = st.slider("Quality (1–5)", 1, 5, 3)
+        relevance = st.slider("Relevance (1–5)", 1, 5, 3)
+        clarity = st.slider("Clarity (1–5)", 1, 5, 3)
+        match = st.radio("Did it match historical cases?", ["Yes", "No"])
+        applicability = st.selectbox(
+            "Applicability",
+            ["Immediate", "Needs Customization", "Not Useful"]
+        )
+
+        submit = st.form_submit_button("Submit Feedback")
+
+        if submit:
+            best_subject = st.session_state["similar_results"][0].get("mpr_subject", "")
+            similarity_score = st.session_state["similar_results"][0].get("confidence", 0)
+
+            reward = save_feedback({
+                "mpr_subject": best_subject,
+                "similarity_score": similarity_score,
+                "quality_rating": quality,
+                "relevance_rating": relevance,
+                "clarity_rating": clarity,
+                "match_accuracy": match,
+                "applicability": applicability
+            })
+
+            st.success(f"Feedback saved. Reward score: {reward}")
+
 
 
 # ========================= # Logic: User-Specific View (NEW dropdown + filters + strict gating) # =========================

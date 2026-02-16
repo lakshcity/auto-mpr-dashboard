@@ -1,12 +1,13 @@
+import os
 import requests
-import streamlit as st
 from services.retriever import retrieve_context
 
 # -------------------------
 # ENVIRONMENT DETECTION
 # -------------------------
 
-IS_CLOUD = "GROQ_API_KEY" in st.secrets
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+IS_CLOUD = GROQ_API_KEY is not None
 
 # -------------------------
 # LOCAL OLLAMA SETTINGS
@@ -21,7 +22,7 @@ OLLAMA_MODEL = "llama3.2:3b"
 
 if IS_CLOUD:
     from groq import Groq
-    groq_client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+    groq_client = Groq(api_key=GROQ_API_KEY)
     GROQ_MODEL = "llama-3.1-8b-instant"
 
 
