@@ -11,6 +11,41 @@ INDEX_FILE = "data/case_index_master.faiss"
 META_FILE = "data/case_meta_master.pkl"
 STATE_FILE = "data/case_hash_state.pkl"  # optional
 
+# ========================= # Imports # =========================
+import streamlit as st
+import pickle
+import faiss
+from sentence_transformers import SentenceTransformer
+import pandas as pd
+import matplotlib.pyplot as plt
+import altair as alt
+
+from services.auth import verify_user
+
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+if not st.session_state.authenticated:
+
+    st.title("🔐 Login")
+
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+
+    if st.button("Login"):
+
+        role = verify_user(username, password)
+
+        if role:
+            st.session_state.authenticated = True
+            st.session_state.role = role
+            st.rerun()
+        else:
+            st.error("Invalid credentials")
+
+    st.stop()
+
+
 # --- FIX: SMART LOGO FINDER
 def get_logo_path():
     """Tries to find the logo in multiple locations to prevent crashes."""
@@ -52,17 +87,6 @@ from services.feedback_manager import (
     get_reward_trend,
     get_subject_feedback_count
 )
-
-
-
-# ========================= # Imports # =========================
-import streamlit as st
-import pickle
-import faiss
-from sentence_transformers import SentenceTransformer
-import pandas as pd
-import matplotlib.pyplot as plt
-import altair as alt
 
 Path("data/case_index_master.faiss")
 
@@ -270,6 +294,11 @@ with st.sidebar:
     if st.button("Clear Cache & Reset"):
         st.cache_resource.clear()
         st.rerun()
+    if st.session_state.get("authenticated"):
+        if st.button("Logout"):
+            st.session_state.clear()
+            st.rerun()
+
 
 # ========================= # Header # =========================
 st.markdown("\n", unsafe_allow_html=True)
@@ -282,13 +311,18 @@ st.markdown("## Auto MPR Response Recommendation", unsafe_allow_html=True)
 # ========================= # Query Mode # =========================
 st.markdown("\n", unsafe_allow_html=True)
 c1, c2, c3 = st.columns([1, 2, 1])
-with c2:
-    query_mode = st.radio(
-        "Query Mode",
-        ["General MPR Issue", "User-Specific View"],
-        horizontal=True,
-        label_visibility="collapsed"
-    )
+if st.session_state.role == "admin":
+    available_modes = ["General MPR Issue", "User-Specific View"]
+else:
+    available_modes = ["General MPR Issue"]
+
+query_mode = st.radio(
+    "Query Mode",
+    available_modes,
+    horizontal=True,
+    label_visibility="collapsed"
+)
+
 
 # ========================= # Load Resources # =========================
 scale = "master"

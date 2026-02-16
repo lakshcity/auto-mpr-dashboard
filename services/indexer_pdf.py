@@ -1,5 +1,6 @@
 import time
 import pickle
+import re
 from pathlib import Path
 import faiss
 import numpy as np
@@ -12,28 +13,49 @@ PDF_DIR = BASE_DIR / "data" / "pdfs"
 INDEX_PATH = BASE_DIR / "data" / "pdf_index.faiss"
 META_PATH = BASE_DIR / "data" / "pdf_meta.pkl"
 
-CHUNK_SIZE = 500  # words
-CHUNK_OVERLAP = 100
+CHUNK_SIZE = 300
+CHUNK_OVERLAP = 80
 
 
-# -----------------------------------
-# Text Chunking
-# -----------------------------------
-def chunk_text(text, chunk_size=CHUNK_SIZE, overlap=CHUNK_OVERLAP):
-    words = text.split()
+# ---------------------------------------------------
+# Text Cleaning
+# ---------------------------------------------------
+def clean_text(text):
+    text = re.sub(r"\s+", " ", text)  # normalize whitespace
+    text = text.replace("\x00", "")
+    return text.strip()
+
+
+# ---------------------------------------------------
+# Paragraph-Based Smart Chunking
+# ---------------------------------------------------
+def chunk_text(text, chunk_size=300, overlap=80):
+    paragraphs = [p.strip() for p in text.split("\n") if p.strip()]
     chunks = []
+    current_chunk = []
 
-    for i in range(0, len(words), chunk_size - overlap):
-        chunk = words[i:i + chunk_size]
-        if len(chunk) > 50:  # avoid tiny fragments
-            chunks.append(" ".join(chunk))
+    for para in paragraphs:
+        words = para.split()
+
+        if len(" ".join(current_chunk).split()) + len(words) <= chunk_size:
+            current_chunk.append(para)
+        else:
+            if current_chunk:
+                chunks.append(" ".join(current_chunk))
+
+            # apply overlap
+            overlap_words = " ".join(current_chunk).split()[-overlap:]
+            current_chunk = [" ".join(overlap_words), para]
+
+    if current_chunk:
+        chunks.append(" ".join(current_chunk))
 
     return chunks
 
 
-# -----------------------------------
-# PDF Loader with Chunking
-# -----------------------------------
+# ---------------------------------------------------
+# PDF Loader
+# ---------------------------------------------------
 def load_and_chunk_pdfs(pdf_dir: Path):
     docs = []
 
@@ -46,14 +68,17 @@ def load_and_chunk_pdfs(pdf_dir: Path):
             if page_text:
                 full_text += page_text + "\n"
 
-        if full_text.strip():
+        full_text = clean_text(full_text)
+
+        if full_text:
             chunks = chunk_text(full_text)
 
             for idx, chunk in enumerate(chunks):
                 docs.append({
                     "source": pdf_file.name,
                     "chunk_id": idx,
-                    "text": chunk
+                    "text": chunk,
+                    "length": len(chunk.split())
                 })
 
     if not docs:
@@ -62,11 +87,11 @@ def load_and_chunk_pdfs(pdf_dir: Path):
     return docs
 
 
-# -----------------------------------
+# ---------------------------------------------------
 # Index Builder
-# -----------------------------------
+# ---------------------------------------------------
 def build_pdf_index():
-    print("=== CHUNKED PDF INDEX BUILD STARTED ===")
+    print("=== HYBRID OPTIMIZED PDF INDEX BUILD STARTED ===")
     start = time.time()
 
     if not PDF_DIR.exists():
@@ -87,8 +112,11 @@ def build_pdf_index():
         batch_size=32
     ).astype("float32")
 
-    print("Building FAISS index...")
-    index = faiss.IndexFlatL2(embeddings.shape[1])
+    # Normalize embeddings for cosine similarity
+    faiss.normalize_L2(embeddings)
+
+    print("Building FAISS cosine index...")
+    index = faiss.IndexFlatIP(embeddings.shape[1])
     index.add(embeddings)
 
     faiss.write_index(index, str(INDEX_PATH))
@@ -96,7 +124,7 @@ def build_pdf_index():
     with open(META_PATH, "wb") as f:
         pickle.dump(docs, f)
 
-    print(f"✅ Chunked PDF index built")
+    print("✅ Optimized PDF index built")
     print(f"Total chunks: {len(docs)}")
     print(f"⏱ Time: {round(time.time() - start, 2)} sec")
 

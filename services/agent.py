@@ -25,21 +25,22 @@ if IS_CLOUD:
     groq_client = Groq(api_key=GROQ_API_KEY)
     GROQ_MODEL = "llama-3.1-8b-instant"
 
-
 def pdf_agent(question: str):
 
     context = retrieve_context(question)
 
-    if not context:
-        return "Not found in documents."
+    # If no context found, fallback to reasoning mode
+    if not context.strip():
+        context = "No direct document match found. Use domain knowledge and provide best possible guidance."
 
     prompt = f"""
-You are an internal BusinessNext support assistant.
+You are an internal BusinessNext enterprise support assistant.
 
-Answer in maximum 6 short bullet points.
-Each bullet under 15 words.
-Be concise and procedural.
-If not found, say: Not found in documents.
+Use the provided context if relevant.
+If context is weak, infer logically but do NOT hallucinate product features.
+Provide procedural solution steps.
+Maximum 6 concise bullet points.
+Each bullet under 18 words.
 
 Context:
 {context}
@@ -50,19 +51,16 @@ Question:
 Answer:
 """
 
-    # -------------------------
-    # CLOUD MODE (Groq)
-    # -------------------------
     if IS_CLOUD:
         try:
             completion = groq_client.chat.completions.create(
                 model=GROQ_MODEL,
                 messages=[
-                    {"role": "system", "content": "You are a helpful enterprise assistant."},
+                    {"role": "system", "content": "You are a precise enterprise AI assistant."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.1,
-                max_tokens=200
+                temperature=0.2,
+                max_tokens=250
             )
 
             return completion.choices[0].message.content
@@ -70,9 +68,6 @@ Answer:
         except Exception as e:
             return f"Groq API error: {str(e)}"
 
-    # -------------------------
-    # LOCAL MODE (Ollama)
-    # -------------------------
     else:
         try:
             res = requests.post(
@@ -82,8 +77,8 @@ Answer:
                     "prompt": prompt,
                     "stream": False,
                     "options": {
-                        "temperature": 0.1,
-                        "num_predict": 120
+                        "temperature": 0.2,
+                        "num_predict": 180
                     }
                 },
                 timeout=60

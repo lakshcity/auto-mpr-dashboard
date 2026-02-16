@@ -24,7 +24,7 @@ EMBED_MODEL = os.getenv("EMBED_MODEL", "all-MiniLM-L6-v2")
 # LLM (generation only, NOT embeddings)
 OLLAMA_MODEL = os.getenv("OLLAMA_LLM_MODEL", "llama3.2:3b")
 
-TOP_K = int(os.getenv("TOP_K", "2"))
+TOP_K = int(os.getenv("TOP_K", "6"))
 
 # ---------------------------
 # Safety logs (optional but useful)

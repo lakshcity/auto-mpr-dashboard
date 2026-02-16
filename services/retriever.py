@@ -1,5 +1,5 @@
 ﻿# =====================================================
-# 🚀 RETRIEVER: PDF RAG + REDASH HYBRID (OPTIMIZED)
+# 🚀 RETRIEVER: PDF RAG + REDASH HYBRID (COSINE OPTIMIZED)
 # =====================================================
 
 import pickle
@@ -11,14 +11,15 @@ from sentence_transformers import SentenceTransformer
 from core.config import PDF_INDEX, PDF_META, EMBED_MODEL, TOP_K
 from services.feedback_manager import get_subject_success_rate
 
+
 # =====================================================
-# 🔹 1️⃣ LOAD PDF RAG RESOURCES (FOR RECOMMENDATION)
+# 🔹 1️⃣ LOAD PDF RAG RESOURCES
 # =====================================================
 
 print("🔄 Loading embedding model...")
 MODEL = SentenceTransformer(EMBED_MODEL)
 
-print("🔄 Loading PDF FAISS index...")
+print("🔄 Loading PDF FAISS cosine index...")
 INDEX = faiss.read_index(str(PDF_INDEX))
 
 with open(PDF_META, "rb") as f:
@@ -28,7 +29,7 @@ print("✅ PDF Retriever Ready")
 
 
 # =====================================================
-# 🔹 2️⃣ LOAD REDASH FILE (MULTI-FORMAT SUPPORT)
+# 🔹 2️⃣ LOAD REDASH FILE
 # =====================================================
 
 BASE_DIR = Path(__file__).resolve().parents[1]
@@ -36,7 +37,6 @@ DATA_DIR = BASE_DIR / "data"
 
 REDASH_DF = pd.DataFrame()
 REDASH_INDEX = None
-REDASH_READY = False
 
 
 def load_redash_file():
@@ -56,7 +56,6 @@ def load_redash_file():
                 else:
                     REDASH_DF = pd.read_excel(file_path)
 
-                # Normalize columns
                 REDASH_DF.columns = (
                     REDASH_DF.columns
                     .str.strip()
@@ -64,7 +63,6 @@ def load_redash_file():
                 )
 
                 print(f"✅ Loaded Redash file: {file_path.name}")
-                print("Columns:", REDASH_DF.columns.tolist())
                 return
             except Exception as e:
                 print(f"❌ Error loading {file_path.name}: {e}")
@@ -72,14 +70,11 @@ def load_redash_file():
     print("❌ No Redash file found.")
 
 
-# Load Redash
 load_redash_file()
 
 
-
-
 # =====================================================
-# 🔹 4️⃣ HYBRID SEARCH (KEYWORD + SEMANTIC)
+# 🔹 3️⃣ REDASH SEARCH (Adaptive Ranking)
 # =====================================================
 
 def search_redash_mpr(query, top_k=5):
@@ -96,9 +91,7 @@ def search_redash_mpr(query, top_k=5):
 
     query_lower = query.lower()
 
-    # ---------------------------------------
-    # 1️⃣ KEYWORD MATCH FIRST (FAST)
-    # ---------------------------------------
+    # ---------- KEYWORD MATCH ----------
     keyword_df = REDASH_DF[
         REDASH_DF[subject_col]
         .astype(str)
@@ -108,42 +101,10 @@ def search_redash_mpr(query, top_k=5):
 
     if not keyword_df.empty:
         results = keyword_df.head(top_k).to_dict("records")
+        return _apply_adaptive_scoring(results)
 
-        enhanced_results = []
-
-        for r in results:
-            r["confidence"] = 95
-
-            subject = r.get("mpr_subject", "")
-            success_rate = get_subject_success_rate(subject)
-            reward_scaled = success_rate * 20
-
-            adaptive_score = (
-                0.7 * r["confidence"] +
-                0.3 * reward_scaled
-            )
-
-            if success_rate < 1.5:
-                adaptive_score*= 0.8
-
-            composite_confidence = (
-                0.6 * r["confidence"] +
-                0.4 * reward_scaled
-            )
-
-            r["adaptive_score"] = round(adaptive_score, 2)
-            r["composite_confidence"] = round(composite_confidence, 2)
-
-            enhanced_results.append(r)
-
-        return enhanced_results
-
-    # ---------------------------------------
-    # 2️⃣ SEMANTIC MATCH (LAZY BUILD)
-    # ---------------------------------------
-
+    # ---------- SEMANTIC MATCH ----------
     if REDASH_INDEX is None:
-        print("⚙️ Building Redash semantic index (lazy build)...")
 
         combined_text = (
             REDASH_DF["mpr_subject"].astype(str).fillna("") + " " +
@@ -161,8 +122,6 @@ def search_redash_mpr(query, top_k=5):
         REDASH_INDEX = faiss.IndexFlatL2(embeddings.shape[1])
         REDASH_INDEX.add(embeddings)
 
-        print("✅ Redash semantic index ready")
-
     query_vec = MODEL.encode([query]).astype("float32")
     distances, indices = REDASH_INDEX.search(query_vec, top_k)
 
@@ -170,58 +129,56 @@ def search_redash_mpr(query, top_k=5):
 
     for rank, idx in enumerate(indices[0]):
         row = REDASH_DF.iloc[idx].to_dict()
+
         max_dist = max(distances[0])
         min_dist = min(distances[0])
 
-        if max_dist == min_dist:    
+        if max_dist == min_dist:
             confidence = 80
         else:
             normalized = (max_dist - distances[0][rank]) / (max_dist - min_dist)
             confidence = round(normalized * 100, 2)
 
-        row["confidence"] = round(confidence, 2)
+        row["confidence"] = confidence
+        results.append(row)
 
-        # ---------------------------------------
-        # 🔥 Adaptive Learning Layer
-        # ---------------------------------------
-        subject = row.get("mpr_subject", "")
+    return _apply_adaptive_scoring(results)
+
+
+def _apply_adaptive_scoring(results):
+
+    enhanced = []
+
+    for r in results:
+
+        subject = r.get("mpr_subject", "")
         success_rate = get_subject_success_rate(subject)
 
-        # Scale reward (0–5) to 0–100 range
         reward_scaled = success_rate * 20
 
         final_score = (
-            0.7 * row["confidence"] +
+            0.7 * r.get("confidence", 0) +
             0.3 * reward_scaled
         )
 
-        # ---------------------------------------
-        # 🔥 Penalty Memory Layer
-        # ---------------------------------------
         if success_rate < 1.5:
-            final_score *= 0.8   # reduce score by 20%
+            final_score *= 0.8
 
-        row["adaptive_score"] = round(final_score, 2)
-
-
-        # Composite confidence for UI display
         composite_confidence = (
-            0.6 * row["confidence"] +
+            0.6 * r.get("confidence", 0) +
             0.4 * reward_scaled
         )
 
-        row["composite_confidence"] = round(composite_confidence, 2)
+        r["adaptive_score"] = round(final_score, 2)
+        r["composite_confidence"] = round(composite_confidence, 2)
 
+        enhanced.append(r)
 
-        results.append(row)
-
-
-    return results
-
+    return enhanced
 
 
 # =====================================================
-# 🔹 5️⃣ PDF CONTEXT RETRIEVAL (FOR RAG)
+# 🔹 4️⃣ PDF CONTEXT RETRIEVAL (COSINE + KEYWORD BOOST)
 # =====================================================
 
 def retrieve_context(query, return_scores=False):
@@ -230,23 +187,44 @@ def retrieve_context(query, return_scores=False):
         return "", []
 
     query_vec = MODEL.encode([query]).astype("float32")
-    distances, indices = INDEX.search(query_vec, TOP_K)
+    faiss.normalize_L2(query_vec)
 
-    chunks = []
-    scores = []
+    distances, indices = INDEX.search(query_vec, TOP_K * 2)
+
+    ranked_chunks = []
+    query_terms = query.lower().split()
 
     for rank, idx in enumerate(indices[0]):
+
         if 0 <= idx < len(METADATA):
             text = METADATA[idx].get("text", "")
-            if text:
-                chunks.append(text)
-                # Convert L2 distance to similarity score
-                score = 1 / (1 + distances[0][rank])
-                scores.append(score)
 
-    # Compress context size
+            if text:
+
+                semantic_score = distances[0][rank]
+
+                # Convert cosine similarity to %
+                confidence_percent = max(0, semantic_score) * 100
+
+                keyword_score = sum(
+                    term in text.lower() for term in query_terms
+                )
+
+                # Keyword boost scaled properly
+                combined_score = confidence_percent + (5 * keyword_score)
+
+                ranked_chunks.append((combined_score, text))
+
+    ranked_chunks.sort(reverse=True, key=lambda x: x[0])
+
+    selected = ranked_chunks[:TOP_K]
+
+    chunks = [c[1] for c in selected]
+    scores = [c[0] for c in selected]
+
     context = "\n\n".join(chunks)
-    MAX_CHARS = 1500
+
+    MAX_CHARS = 1800
     if len(context) > MAX_CHARS:
         context = context[:MAX_CHARS]
 
@@ -254,5 +232,3 @@ def retrieve_context(query, return_scores=False):
         return context, scores
 
     return context
-
-
