@@ -6,7 +6,15 @@ import faiss
 import numpy as np
 from sentence_transformers import SentenceTransformer
 from pypdf import PdfReader
+import pytesseract
 
+# Explicitly point to the executable
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+
+from pdf2image import convert_from_path
+
+# Replace this with the actual path where you extracted the bin folder
+POPPLER_PATH = r'C:\poppler\poppler-25.12.0\Library\bin'
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 PDF_DIR = BASE_DIR / "data" / "pdfs"
@@ -16,19 +24,16 @@ META_PATH = BASE_DIR / "data" / "pdf_meta.pkl"
 CHUNK_SIZE = 300
 CHUNK_OVERLAP = 80
 
+# If Windows:
+# pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
-# ---------------------------------------------------
-# Text Cleaning
-# ---------------------------------------------------
+
 def clean_text(text):
-    text = re.sub(r"\s+", " ", text)  # normalize whitespace
+    text = re.sub(r"\s+", " ", text)
     text = text.replace("\x00", "")
     return text.strip()
 
 
-# ---------------------------------------------------
-# Paragraph-Based Smart Chunking
-# ---------------------------------------------------
 def chunk_text(text, chunk_size=300, overlap=80):
     paragraphs = [p.strip() for p in text.split("\n") if p.strip()]
     chunks = []
@@ -43,7 +48,6 @@ def chunk_text(text, chunk_size=300, overlap=80):
             if current_chunk:
                 chunks.append(" ".join(current_chunk))
 
-            # apply overlap
             overlap_words = " ".join(current_chunk).split()[-overlap:]
             current_chunk = [" ".join(overlap_words), para]
 
@@ -53,22 +57,37 @@ def chunk_text(text, chunk_size=300, overlap=80):
     return chunks
 
 
-# ---------------------------------------------------
-# PDF Loader
-# ---------------------------------------------------
+def extract_text_and_images(pdf_path):
+    reader = PdfReader(pdf_path)
+    full_text = ""
+
+    # Extract regular text
+    for page in reader.pages:
+        page_text = page.extract_text()
+        if page_text:
+            full_text += page_text + "\n"
+
+    # Extract images and apply OCR
+    try:
+        images = convert_from_path(pdf_path, poppler_path=POPPLER_PATH)
+        for img in images:
+            ocr_text = pytesseract.image_to_string(img)
+            if ocr_text.strip():
+                full_text += "\n" + ocr_text + "\n"
+    except Exception as e:
+        print(f"OCR failed for {pdf_path.name}: {e}")
+
+    return clean_text(full_text)
+
+
+
 def load_and_chunk_pdfs(pdf_dir: Path):
     docs = []
 
     for pdf_file in pdf_dir.glob("*.pdf"):
-        reader = PdfReader(pdf_file)
-        full_text = ""
+        print(f"Processing: {pdf_file.name}")
 
-        for page in reader.pages:
-            page_text = page.extract_text()
-            if page_text:
-                full_text += page_text + "\n"
-
-        full_text = clean_text(full_text)
+        full_text = extract_text_and_images(pdf_file)
 
         if full_text:
             chunks = chunk_text(full_text)
@@ -87,24 +106,15 @@ def load_and_chunk_pdfs(pdf_dir: Path):
     return docs
 
 
-# ---------------------------------------------------
-# Index Builder
-# ---------------------------------------------------
 def build_pdf_index():
-    print("=== HYBRID OPTIMIZED PDF INDEX BUILD STARTED ===")
+    print("=== PDF INDEX WITH OCR STARTED ===")
     start = time.time()
 
-    if not PDF_DIR.exists():
-        raise FileNotFoundError(f"PDF folder not found: {PDF_DIR}")
-
-    print("Loading and chunking PDFs...")
     docs = load_and_chunk_pdfs(PDF_DIR)
     texts = [d["text"] for d in docs]
 
-    print("Loading embedding model...")
     model = SentenceTransformer("all-MiniLM-L6-v2")
 
-    print("Encoding chunks...")
     embeddings = model.encode(
         texts,
         show_progress_bar=True,
@@ -112,10 +122,8 @@ def build_pdf_index():
         batch_size=32
     ).astype("float32")
 
-    # Normalize embeddings for cosine similarity
     faiss.normalize_L2(embeddings)
 
-    print("Building FAISS cosine index...")
     index = faiss.IndexFlatIP(embeddings.shape[1])
     index.add(embeddings)
 
@@ -124,9 +132,9 @@ def build_pdf_index():
     with open(META_PATH, "wb") as f:
         pickle.dump(docs, f)
 
-    print("✅ Optimized PDF index built")
+    print("✅ OCR-enabled PDF index built")
     print(f"Total chunks: {len(docs)}")
-    print(f"⏱ Time: {round(time.time() - start, 2)} sec")
+    print(f"Time: {round(time.time() - start, 2)} sec")
 
 
 if __name__ == "__main__":
