@@ -31,3 +31,7 @@ timestamp,mpr_subject,similarity_score,quality_rating,relevance_rating,clarity_r
 2026-02-17 07:05:52.985860,Need PM role for allocating resources to projects,50.33000183105469,5,5,5,Yes,Immediate,4.0
 2026-02-17 07:10:18.823867,Need PM role for allocating resources to projects,50.33000183105469,4,3,4,Yes,Immediate,3.0
 2026-02-17 07:12:49.568324,Timesheet options are not properly visible,0.0,5,5,5,Yes,Immediate,4.0
+2026-02-17 08:36:14.662881,Unable to add resources to the project even though I have project manager role,100.0,4,2,5,No,Needs Customization,2.75
+2026-02-17 08:57:10.727031,Role addition on User,100.0,5,5,5,Yes,Immediate,4.0
+2026-02-17 10:25:19.914193,User deactivate,0.0,5,5,5,Yes,Immediate,4.0
+2026-02-17 10:26:49.694272,Timesheet Allocation - not able to add users for project id 6074,0.0,4,3,4,Yes,Needs Customization,2.95

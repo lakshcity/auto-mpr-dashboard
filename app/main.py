@@ -59,8 +59,11 @@ def load_css():
 
 load_css()
 
-# ========================= # LOGIN (centered, with role dropdown) # =========================
+# =========================
+# LOGIN (centered, with role dropdown)
+# =========================
 if not st.session_state.authenticated:
+
     login_col1, login_col2, login_col3 = st.columns([1, 2, 1])
 
     with login_col2:
@@ -68,24 +71,32 @@ if not st.session_state.authenticated:
             st.image(LOGO_PATH, width=220)
         st.markdown("## 🔐 Login")
 
-    with login_col2:
         username = st.text_input("Username")
         password = st.text_input("Password", type="password")
-        role_selected = st.selectbox("Login As", ["consultant", "admin"])
+        role_selected = st.selectbox(
+            "Login As",
+            ["consultant", "admin", "admin_analyst"]
+        )
 
-        if st.button("Login", use_container_width=True):
-            role = verify_user(username, password)
+        login_clicked = st.button("Login", use_container_width=True)
+
+        if login_clicked:
+
+            role = verify_user(username.strip(), password.strip())
+
             if role:
-                # Optional override for demo
-                role = role_selected
-                st.session_state.authenticated = True
-                st.session_state.role = role
-                st.rerun()
+                if role == role_selected:
+                    st.session_state.authenticated = True
+                    st.session_state.role = role
+                    st.rerun()
+                else:
+                    st.error("Selected role does not match your assigned role.")
             else:
                 st.error("Invalid credentials")
 
     # Stop rendering the rest of the app until user is authenticated
     st.stop()
+
 
 # ✅ FIX 2: Merged all imports from user_insights to prevent reload issues
 from services.user_insights import (
@@ -306,10 +317,17 @@ with hcol2:
 st.markdown("\n", unsafe_allow_html=True)
 c1, c2, c3 = st.columns([1, 2, 1])
 
-if st.session_state.role == "admin":
-    available_modes = ["General MPR Issue", "User-Specific View"]
-else:
+role = st.session_state.role
+
+if role == "consultant":
     available_modes = ["General MPR Issue"]
+
+elif role == "admin":
+    available_modes = ["General MPR Issue", "User-Specific View"]
+
+elif role == "admin_analyst":
+    available_modes = ["General MPR Issue", "User-Specific View", "Analytics Dashboard"]
+
 
 query_mode = st.radio(
     "Query Mode",
@@ -348,43 +366,76 @@ def load_resources():
 
 model, index, metadata = load_resources()
 
-# ========================= # Inputs # =========================
+# =========================
+# Inputs
+# =========================
 st.markdown('\n', unsafe_allow_html=True)
 ci1, ci2, ci3 = st.columns([1, 2, 1])
 
 with ci2:
-    if query_mode == "General MPR Issue":
-        query = st.text_area("Enter MPR Issue", height=100, placeholder="Describe the issue...")
-        # Keep run button consistent across modes
-        run_clicked = st.button("Run", use_container_width=True)
-    else:
-        # --- NEW: user dropdown and FY/FQ/FM filters based on reportedon
-        owners = get_all_owners()
-        selected_user = st.selectbox("Select User", owners, index=0 if owners else None)
 
-        # Filters appear AFTER user
+    # -------------------------
+    # General MPR Issue
+    # -------------------------
+    if query_mode == "General MPR Issue":
+
+        query = st.text_area(
+            "Enter MPR Issue",
+            height=100,
+            placeholder="Describe the issue..."
+        )
+
+        run_clicked = st.button("Run", use_container_width=True)
+
+
+    # -------------------------
+    # User-Specific View ONLY
+    # -------------------------
+    elif query_mode == "User-Specific View":
+
+        owners = get_all_owners()
+        selected_user = st.selectbox(
+            "Select User",
+            owners,
+            index=0 if owners else None
+        )
+
         fy = fq = fm = None
+
         if selected_user:
+
             ff1, ff2, ff3 = st.columns(3)
+
             with ff1:
-                fy = st.selectbox("Financial Year (Apr–Mar)", ["All", "FY24", "FY25", "FY26"])
+                fy = st.selectbox(
+                    "Financial Year (Apr–Mar)",
+                    ["All", "FY24", "FY25", "FY26"]
+                )
+
             with ff2:
-                fq = st.selectbox("Financial Quarter", ["All", "Q1", "Q2", "Q3", "Q4"])
+                fq = st.selectbox(
+                    "Financial Quarter",
+                    ["All", "Q1", "Q2", "Q3", "Q4"]
+                )
+
             with ff3:
-                # --- FIX: Quarter selection restricts FM options to the 3 months in that quarter
                 quarter_to_fm = {
-                    "Q1": [1, 2, 3],   # Apr–Jun
-                    "Q2": [4, 5, 6],   # Jul–Sep
-                    "Q3": [7, 8, 9],   # Oct–Dec
-                    "Q4": [10, 11, 12] # Jan–Mar
+                    "Q1": [1, 2, 3],
+                    "Q2": [4, 5, 6],
+                    "Q3": [7, 8, 9],
+                    "Q4": [10, 11, 12]
                 }
+
                 if fq and fq != "All":
                     fm_options = ["All"] + quarter_to_fm.get(fq, list(range(1, 13)))
                 else:
                     fm_options = ["All"] + list(range(1, 13))
-                fm = st.selectbox("Financial Month (Apr=1 ... Mar=12)", fm_options)
 
-            # Optional visual hint of month names without changing values
+                fm = st.selectbox(
+                    "Financial Month (Apr=1 ... Mar=12)",
+                    fm_options
+                )
+
             if fq == "Q1":
                 st.caption("Q1 months: Apr (1), May (2), Jun (3)")
             elif fq == "Q2":
@@ -394,15 +445,22 @@ with ci2:
             elif fq == "Q4":
                 st.caption("Q4 months: Jan (10), Feb (11), Mar (12)")
 
-            # Gate note
             st.caption(":information_source: All metrics use **reported on** date and **exclude weekends**.")
 
-        # Keep a button (same label) to avoid changing user habits / LOC
         run_clicked = st.button("Run", use_container_width=True)
-        # keep original variable to avoid breaking dependent code (not used in new flow)
+
+        # Keep compatibility variable
         user_id = ""
 
-st.markdown('\n', unsafe_allow_html=True)
+
+    # -------------------------
+    # Analytics Dashboard
+    # -------------------------
+    elif query_mode == "Analytics Dashboard":
+
+        # No user filters here
+        run_clicked = True  # Always load analytics immediately
+
 
 # ========================= # State Management # =========================
 if "user_summary" not in st.session_state:
@@ -425,6 +483,11 @@ if st.session_state.last_query_mode != query_mode:
 # =========================
 # Logic: General Search (CLEAN HYBRID FLOW)
 # =========================
+
+# --- Feedback state flag (initialize once) ---
+if "feedback_submitted" not in st.session_state:
+    st.session_state.feedback_submitted = False
+
 if run_clicked and query_mode == "General MPR Issue":
     if not query.strip():
         st.warning("Please enter an MPR issue.")
@@ -433,71 +496,140 @@ if run_clicked and query_mode == "General MPR Issue":
     else:
         with st.spinner("Searching similar past MPRs..."):
             results = search_redash_mpr(query)
+
             if not results:
                 st.warning("No similar MPR subjects found in Redash.")
+                # Clear previous state if no results
                 st.session_state.pop("similar_results", None)
                 st.session_state.pop("recommendation_text", None)
+                st.session_state.pop("last_query", None)
+                # Ensure feedback stays disabled until a valid recommendation is generated again
+                st.session_state.feedback_submitted = False
             else:
-                # Sort by confidence once
-                results = sorted(results,key=lambda x: x.get("adaptive_score", x.get("confidence", 0)),reverse=True)
-                # Store results in session
+                # Sort by best available score once (adaptive > confidence)
+                results = sorted(
+                    results,
+                    key=lambda x: x.get("adaptive_score", x.get("confidence", 0)),
+                    reverse=True,
+                )
+                # Store results and last query
                 st.session_state["similar_results"] = results
                 st.session_state["last_query"] = query
                 # Clear previous recommendation when new search happens
                 st.session_state.pop("recommendation_text", None)
+                # New query => allow feedback again once a recommendation is generated
+                st.session_state.feedback_submitted = False
 
 # =========================
 # DISPLAY SIMILAR RESULTS (ONLY ONCE)
 # =========================
 if query_mode == "General MPR Issue" and "similar_results" in st.session_state:
     results = st.session_state["similar_results"]
-    st.subheader("🔍 Similar Historical Cases")
-    for i, r in enumerate(results, 1):
-        conf = round(r.get("composite_confidence", r.get("confidence", 0)),2 )
-        header_subject = r.get("mpr_subject") or "Unknown Subject"
-        header_id = r.get("caseid") or f"Doc-{i}"
-        with st.expander(f"Case {i} — {header_id} — {conf}%"):
-            render_confidence_bar(conf)
-            st.write(f"**Subject:** {header_subject}")
-            if r.get("statuscode"):
-                st.write(f"**Status:** {r.get('statuscode')}")
-            if r.get("reportedon"):
-                st.write(f"**Reported On:** {r.get('reportedon')}")
+    if results:
+        st.subheader("🔍 Similar Historical Cases")
 
-    import pandas as pd
-    import altair as alt
-    scores = [r.get("confidence", 0) for r in results]
-    df_scores = pd.DataFrame({
-        "Case Rank": range(1, len(scores) + 1),
-        "Similarity": scores
-    })
-    chart = alt.Chart(df_scores).mark_bar().encode(
-        x="Case Rank:O",
-        y="Similarity:Q"
-    )
-    st.markdown("### 📊 Similarity Distribution")
-    st.altair_chart(chart, use_container_width=True)
-
-    # -------------------------
-    # Recommendation Button
-    # -------------------------
-    if st.button("🚀 Get Recommendation"):
-        best_subject = results[0].get("mpr_subject", "")
-        with st.spinner("Generating recommendation..."):
+        # Render expandable cards for each result
+        for i, r in enumerate(results, 1):
+            # Prefer composite_confidence; fallback to confidence
+            conf_val = r.get("composite_confidence", r.get("confidence", 0))
             try:
-                recommendation_text = pdf_agent(best_subject)
-                st.session_state["recommendation_text"] = recommendation_text
-            except Exception as e:
-                st.session_state["recommendation_text"] = f"PDF RAG Error: {str(e)}"
+                conf = round(float(conf_val), 2)
+            except Exception:
+                conf = 0.0
+
+            header_subject = r.get("mpr_subject") or "Unknown Subject"
+            header_id = r.get("caseid") or f"Doc-{i}"
+
+            with st.expander(f"Case {i} — {header_id} — {conf}%"):
+                # Visual confidence bar
+                try:
+                    render_confidence_bar(conf)
+                except Exception:
+                    # Fail-safe textual display
+                    st.write(f"**Similarity:** {conf}%")
+
+                st.write(f"**Subject:** {header_subject}")
+                if r.get("statuscode"):
+                    st.write(f"**Status:** {r.get('statuscode')}")
+                if r.get("reportedon"):
+                    st.write(f"**Reported On:** {r.get('reportedon')}")
+
+        # Visualize similarity distribution
+        import pandas as pd
+        import altair as alt
+
+        scores = []
+        for r in results:
+            val = r.get("confidence", 0)
+            try:
+                scores.append(float(val))
+            except Exception:
+                scores.append(0.0)
+
+        df_scores = pd.DataFrame({
+            "Case Rank": list(range(1, len(scores) + 1)),
+            "Similarity (%)": scores
+        })
+
+        st.markdown("### 📊 Similarity Distribution")
+        chart = (
+            alt.Chart(df_scores, title="Similarity across top retrieved cases")
+            .mark_bar(color="#4E79A7")
+            .encode(
+                x=alt.X("Case Rank:O", title="Rank (1 = most similar)"),
+                y=alt.Y("Similarity (%):Q", title="Similarity (%)", scale=alt.Scale(domain=[0, 100])),
+                tooltip=[
+                    alt.Tooltip("Case Rank:O", title="Rank"),
+                    alt.Tooltip("Similarity (%):Q", title="Similarity (%)", format=".2f"),
+                ],
+            )
+        )
+        st.altair_chart(chart, use_container_width=True)
+
+        # -------------------------
+        # Recommendation Button
+        # -------------------------
+        if st.button("🚀 Get Recommendation", key="btn_get_reco"):
+            # Safety guard in case results changed
+            if results and isinstance(results, list):
+                best_subject = results[0].get("mpr_subject", "") or ""
+                if not best_subject.strip():
+                    st.warning("Top result has no subject to query. Try another search.")
+                else:
+                    with st.spinner("Generating recommendation..."):
+                        try:
+                            recommendation_text = pdf_agent(best_subject)
+                            st.session_state["recommendation_text"] = recommendation_text
+                            # Reset feedback lock since this is a fresh recommendation
+                            st.session_state.feedback_submitted = False
+                        except Exception as e:
+                            st.session_state["recommendation_text"] = f"PDF RAG Error: {str(e)}"
+                            # Keep feedback locked off to avoid rating an error
+                            st.session_state.feedback_submitted = True
+            else:
+                st.warning("No results available to generate a recommendation.")
 
 # =========================
 # DISPLAY RECOMMENDATION (PERSISTENT)
 # =========================
-if query_mode == "General MPR Issue" and "recommendation_text" in st.session_state:
+if (
+    query_mode == "General MPR Issue"
+    and "recommendation_text" in st.session_state
+    and st.session_state.get("recommendation_text")
+):
     st.markdown("### ✅ Recommended Solution")
-    from services.feedback_manager import get_subject_success_rate
-    best_subject = st.session_state["similar_results"][0].get("mpr_subject", "")
-    success_rate = get_subject_success_rate(best_subject)
+
+    # Reliability badge using historical feedback
+    try:
+        from services.feedback_manager import get_subject_success_rate
+        best_subject_safe = ""
+        if "similar_results" in st.session_state and st.session_state["similar_results"]:
+            best_subject_safe = st.session_state["similar_results"][0].get("mpr_subject", "") or ""
+        success_rate = get_subject_success_rate(best_subject_safe) if best_subject_safe else 0.0
+    except Exception:
+        success_rate = 0.0
+
+    # Thresholds (>= logic)
     if success_rate >= 4:
         badge = "🟢 High Reliability"
     elif success_rate >= 2.5:
@@ -505,51 +637,107 @@ if query_mode == "General MPR Issue" and "recommendation_text" in st.session_sta
     else:
         badge = "🔴 Needs Review"
     st.markdown(f"**Reliability:** {badge}")
+
+    # The recommendation content
     st.markdown(st.session_state["recommendation_text"])
 
+    # Explainability / provenance
     with st.expander("🔍 Why was this recommended?"):
-        results = st.session_state["similar_results"]
+        results = st.session_state.get("similar_results", [])
         st.write(f"Top Similar Cases Considered: {len(results)}")
-        st.write(f"Top Case Similarity: {results[0].get('confidence', 0)}%")
-        st.write(f"Historical Success Score: {round(success_rate, 2)} / 5")
-        if "adaptive_score" in results[0]:
+
+        top_sim = 0.0
+        if results:
+            try:
+                top_sim = float(results[0].get("confidence", 0))
+            except Exception:
+                top_sim = 0.0
+        st.write(f"Top Case Similarity: {round(top_sim, 2)}%")
+        st.write(f"Historical Success Score: {round(float(success_rate or 0), 2)} / 5")
+
+        if results and "adaptive_score" in results[0]:
             st.write(f"Adaptive Score Used: {results[0]['adaptive_score']}")
 
-        from services.feedback_manager import get_reward_trend
-        trend_df = get_reward_trend()
-        if len(trend_df) < 3:
-            st.info("Performance trend will appear after more feedback submissions.")
-        elif not trend_df.empty:
-            chart = alt.Chart(trend_df).mark_line().encode(
-                x="timestamp:T",
-                y="rolling_avg:Q"
-            )
-            st.altair_chart(chart, use_container_width=True)
+        # Trend chart (if available)
+        try:
+            from services.feedback_manager import get_reward_trend
+            trend_df = get_reward_trend()
+            if trend_df is None or getattr(trend_df, "empty", True):
+                st.info("Performance trend will appear after more feedback submissions.")
+            elif len(trend_df) < 3:
+                st.info("Performance trend will appear after more feedback submissions.")
+            else:
+                import altair as alt
+                trend_chart = (
+                    alt.Chart(trend_df, title="Rolling Average Reward Over Time")
+                    .mark_line(color="#E15759")
+                    .encode(
+                        x=alt.X("timestamp:T", title="Time"),
+                        y=alt.Y("rolling_avg:Q", title="Rolling Avg Reward"),
+                        tooltip=[
+                            alt.Tooltip("timestamp:T", title="Time"),
+                            alt.Tooltip("rolling_avg:Q", title="Rolling Avg", format=".2f"),
+                        ],
+                    )
+                )
+                st.altair_chart(trend_chart, use_container_width=True)
+        except Exception:
+            # Silently ignore trend failures to avoid breaking UX
+            pass
 
+    # =========================
+    # Feedback Form (Disabled after submission until new recommendation)
+    # =========================
     st.markdown("### 📝 Rate This Recommendation")
-    with st.form("feedback_form"):
-        quality = st.slider("Quality (1–5)", 1, 5, 3)
-        relevance = st.slider("Relevance (1–5)", 1, 5, 3)
-        clarity = st.slider("Clarity (1–5)", 1, 5, 3)
-        match = st.radio("Did it match historical cases?", ["Yes", "No"])
+    with st.form("feedback_form_general_issue", clear_on_submit=True):
+        quality = st.slider("Quality (1–5)", 1, 5, 3, key="fb_quality")
+        relevance = st.slider("Relevance (1–5)", 1, 5, 3, key="fb_relevance")
+        clarity = st.slider("Clarity (1–5)", 1, 5, 3, key="fb_clarity")
+        match = st.radio("Did it match historical cases?", ["Yes", "No"], index=0, key="fb_match")
         applicability = st.selectbox(
             "Applicability",
-            ["Immediate", "Needs Customization", "Not Useful"]
+            ["Immediate", "Needs Customization", "Not Useful"],
+            index=0,
+            key="fb_applicability",
         )
-        submit = st.form_submit_button("Submit Feedback")
+        submit = st.form_submit_button(
+            "Submit Feedback",
+            disabled=st.session_state.feedback_submitted  # ✅ lock after submit
+        )
+
         if submit:
-            best_subject = st.session_state["similar_results"][0].get("mpr_subject", "")
-            similarity_score = st.session_state["similar_results"][0].get("confidence", 0)
-            reward = save_feedback({
-                "mpr_subject": best_subject,
-                "similarity_score": similarity_score,
-                "quality_rating": quality,
-                "relevance_rating": relevance,
-                "clarity_rating": clarity,
-                "match_accuracy": match,
-                "applicability": applicability
-            })
-            st.success(f"Feedback saved. Reward score: {reward}")
+            try:
+                from services.feedback_manager import save_feedback
+            except Exception as e:
+                st.error(f"Feedback module not available: {e}")
+                save_feedback = None
+
+            if save_feedback is not None:
+                # Guard best subject and similarity from session
+                sr = st.session_state.get("similar_results", [])
+                best_subject = sr[0].get("mpr_subject", "") if sr else ""
+                try:
+                    similarity_score = float(sr[0].get("confidence", 0)) if sr else 0.0
+                except Exception:
+                    similarity_score = 0.0
+
+                try:
+                    reward = save_feedback({
+                        "mpr_subject": best_subject,
+                        "similarity_score": similarity_score,
+                        "quality_rating": int(quality),
+                        "relevance_rating": int(relevance),
+                        "clarity_rating": int(clarity),
+                        "match_accuracy": match,
+                        "applicability": applicability,
+                    })
+                    st.success(f"Feedback saved. Reward score: {reward}")
+                    # ✅ lock feedback until new query/recommendation
+                    st.session_state.feedback_submitted = True
+                except Exception as e:
+                    st.error(f"Failed to save feedback: {e}")
+                    # Keep unlocked to allow retry
+                    st.session_state.feedback_submitted = False
 
 # ========================= # Logic: User-Specific View (NEW dropdown + filters + strict gating) # =========================
 if query_mode == "User-Specific View" and run_clicked:
@@ -655,12 +843,12 @@ if query_mode == "User-Specific View" and run_clicked:
             with col_sla:
                 st.markdown("### SLA Metrics")
                 sm1, sm2 = st.columns(2)
-                sm1.metric("Active in SLA", sla_table["active_in_sla"])
-                sm2.metric("Near Breach",  sla_table["near_breach"])
+                sm1.metric("Active in SLA", sla_table["active_in_sla"],help="Active cases with ageing less than 7 business days")
+                sm2.metric("Near Breach",  sla_table["near_breach"],help="Active cases with ageing between 5 and 7 business days(approaching SLA breach)")
 
                 sm3, sm4 = st.columns(2)
-                sm3.metric("SLA Breached",    sla_table["sla_breached"])
-                sm4.metric("Compliance %",    sla_table["sla_compliance"])
+                sm3.metric("SLA Breached",    sla_table["sla_breached"],help="Cases (active or closed) with ageing greater than 7 business days")
+                sm4.metric("Compliance %",    sla_table["sla_compliance"],help="Percentage of cases closed within 7 business days")
 
                 # Keep additional SLA KPIs for completeness (no LOC loss), but tuck them into an expander
                 with st.expander("More SLA details"):
@@ -957,6 +1145,8 @@ if query_mode == "User-Specific View" and not run_clicked and st.session_state.f
 
         st.markdown("##### Resolution Rate")
         st.altair_chart(_resolution_ring_chart(resolution_rate, _rate_color(resolution_rate)), use_container_width=False)
+        st.caption("Resolution Rate = (Resolved Cases / Total Cases) × 100")
+
 
         st.markdown("##### Avg Resolution Time (BD)")
         st.altair_chart(_avg_resolution_gauge(sla_table["avg_resolution"], max_bd=20), use_container_width=True)
@@ -1018,6 +1208,8 @@ if query_mode == "User-Specific View" and not run_clicked and st.session_state.f
 
     with chart_col2:
         st.markdown("#### Active Load Severity")
+        st.caption("Distribution of active cases by business-day ageing buckets.")
+
         active_df = filtered_df[filtered_df["closeddate"].isna()].copy()
         if "ageing_bd" not in active_df.columns:
             active_df = add_business_ageing(active_df)
@@ -1136,3 +1328,163 @@ if False and st.session_state.user_summary:
     st.metric("Recent Cases (Last 5 Days)", len(recent_cases))
     # Latest Resolved, Charts, Recent Activity, Focused View (all kept but disabled)
     # (Original rendering code preserved here)
+
+# =========================
+# Analytics Dashboard (Admin Analyst Only)
+# =========================
+if query_mode == "Analytics Dashboard" and role == "admin_analyst":
+
+    st.markdown("## 📊 Admin Analytics Dashboard")
+
+    # Load full dataset (reuse your metadata logic)
+    try:
+        full_df = pd.DataFrame(metadata)
+    except:
+        st.error("Metadata not available for analytics.")
+        st.stop()
+
+    if full_df.empty:
+        st.warning("No data available.")
+        st.stop()
+
+    # Basic cleanup
+    full_df["reportedon"] = pd.to_datetime(full_df.get("reportedon"), errors="coerce")
+    full_df["closeddate"] = pd.to_datetime(full_df.get("closeddate"), errors="coerce")
+
+    total_cases = len(full_df)
+    active_cases = full_df["closeddate"].isna().sum()
+    closed_cases = full_df["closeddate"].notna().sum()
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Total Cases", total_cases)
+    col2.metric("Active Cases", active_cases)
+    col3.metric("Closed Cases", closed_cases)
+
+    # Resolution rate
+    resolution_rate = round((closed_cases / total_cases) * 100, 2) if total_cases > 0 else 0
+    st.metric("Overall Resolution Rate (%)", resolution_rate)
+
+    st.markdown("---")
+
+    # 🔹 User Performance
+    if "owner" in full_df.columns:
+
+        st.markdown("### 👥 User Performance")
+
+        user_perf = (
+            full_df.groupby("owner")
+            .agg(
+                total=("owner", "count"),
+                closed=("closeddate", lambda x: x.notna().sum())
+            )
+        )
+
+        user_perf["resolution_rate"] = (
+            user_perf["closed"] / user_perf["total"] * 100
+        ).round(2)
+
+        user_perf = user_perf.sort_values("resolution_rate", ascending=False)
+
+        st.dataframe(user_perf.head(10), use_container_width=True)
+
+    #===================KPI Row=======================
+
+    avg_resolution = (
+        (full_df["closeddate"] - full_df["reportedon"]).dt.days.mean()
+        if closed_cases > 0 else 0
+    )
+
+    sla_compliance = round((closed_cases / total_cases) * 100, 2) if total_cases > 0 else 0
+
+    col4, col5 = st.columns(2)
+    col4.metric("Avg Resolution Time (Days)", round(avg_resolution, 2))
+    col5.metric("SLA Compliance (%)", sla_compliance)
+
+    #==================Case Trend Over Time (Line Chart)=================
+
+    st.markdown("### 📈 Case Trend Over Time")
+
+    trend_df = (
+        full_df
+        .groupby(full_df["reportedon"].dt.date)
+        .size()
+        .reset_index(name="cases")
+    )
+
+    trend_chart = alt.Chart(trend_df).mark_line(point=True).encode(
+        x="reportedon:T",
+        y="cases:Q"
+    )
+
+    st.altair_chart(trend_chart, use_container_width=True)
+
+    #===================SLA Distribution chart=======================
+
+    st.markdown("### 🚦 SLA Distribution")
+
+    full_df["ageing"] = (
+        (pd.Timestamp.now() - full_df["reportedon"]).dt.days
+    )
+
+    sla_bins = {
+        "In SLA (<7d)": (full_df["ageing"] < 7).sum(),
+        "Near Breach (5–7d)": ((full_df["ageing"] >= 5) & (full_df["ageing"] < 7)).sum(),
+        "Breached (>7d)": (full_df["ageing"] >= 7).sum()
+    }
+
+    sla_dist_df = pd.DataFrame({
+        "Category": list(sla_bins.keys()),
+        "Count": list(sla_bins.values())
+    })
+
+    sla_chart = alt.Chart(sla_dist_df).mark_bar().encode(
+        x="Category",
+        y="Count"
+    )
+
+    st.altair_chart(sla_chart, use_container_width=True)
+
+    #=================TOP 10 Users by Resolution Rate=========================
+
+    if "owner" in full_df.columns:
+
+        st.markdown("### 👥 Top 10 Performers")
+
+        user_perf = (
+            full_df.groupby("owner")
+            .agg(
+                total=("owner", "count"),
+                closed=("closeddate", lambda x: x.notna().sum())
+            )
+        )
+
+        user_perf["resolution_rate"] = (
+            user_perf["closed"] / user_perf["total"] * 100
+        ).round(2)
+
+        user_perf = user_perf.sort_values("resolution_rate", ascending=False).head(10)
+
+        chart = alt.Chart(user_perf.reset_index()).mark_bar().encode(
+            x="resolution_rate:Q",
+            y="owner:N"
+        )
+
+        st.altair_chart(chart, use_container_width=True)
+
+        #=========Feedback Intelligence System===============================
+
+
+
+        st.markdown("### 🤖 AI Learning Trend")
+
+        trend_df = get_reward_trend()
+
+        if not trend_df.empty:
+            reward_chart = alt.Chart(trend_df).mark_line().encode(
+                x="timestamp:T",
+                y="rolling_avg:Q"
+            )
+            st.altair_chart(reward_chart, use_container_width=True)
+        else:
+            st.info("Feedback trend will appear after more submissions.")
+
