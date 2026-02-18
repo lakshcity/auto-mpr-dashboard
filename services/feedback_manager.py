@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 from datetime import datetime
+import numpy as np
 
 FEEDBACK_FILE = "data/feedback_log.csv"
 
@@ -17,14 +18,21 @@ REQUIRED_COLUMNS = [
 ]
 
 
+# =========================
+# File Initialization
+# =========================
 def _initialize_file():
     if not os.path.exists(FEEDBACK_FILE):
         df = pd.DataFrame(columns=REQUIRED_COLUMNS)
         df.to_csv(FEEDBACK_FILE, index=False)
 
 
+# =========================
+# Reward Calculation
+# =========================
 def compute_reward(row):
     match_score = 1 if row["match_accuracy"] == "Yes" else 0
+
     applicability_score = {
         "Immediate": 1,
         "Needs Customization": 0.5,
@@ -42,11 +50,13 @@ def compute_reward(row):
     return round(reward, 3)
 
 
+# =========================
+# Save Feedback
+# =========================
 def save_feedback(data: dict):
     _initialize_file()
 
     data["timestamp"] = datetime.utcnow()
-
     reward = compute_reward(data)
     data["final_reward"] = reward
 
@@ -57,26 +67,9 @@ def save_feedback(data: dict):
     return reward
 
 
-def get_subject_success_rate(mpr_subject):
-    if not os.path.exists(FEEDBACK_FILE):
-        return 0.0
-
-    df = pd.read_csv(FEEDBACK_FILE)
-    subject_df = df[df["mpr_subject"] == mpr_subject]
-
-    if subject_df.empty:
-        return 0.0
-
-    return round(subject_df["final_reward"].mean(), 3)
-
-
-def get_subject_feedback_count(mpr_subject):
-    if not os.path.exists(FEEDBACK_FILE):
-        return 0
-
-    df = pd.read_csv(FEEDBACK_FILE)
-    return len(df[df["mpr_subject"] == mpr_subject])
-
+# =========================
+# Load Feedback
+# =========================
 def load_feedback():
     if not os.path.exists(FEEDBACK_FILE):
         return pd.DataFrame(columns=REQUIRED_COLUMNS)
@@ -85,7 +78,96 @@ def load_feedback():
     df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
     return df
 
-def get_feedback_stats():
+
+# =========================
+# Recency Weighting
+# =========================
+def apply_recency_weighting(df, decay_lambda=0.01):
+    if df.empty:
+        return df
+
+    # FIX: Ensure 'now' and 'timestamp' are both UTC aware
+    now = pd.Timestamp.utcnow()
+    
+    # Check if the column already has timezone info; if not, localize to UTC
+    if df["timestamp"].dt.tz is None:
+        df["timestamp"] = df["timestamp"].dt.tz_localize('UTC')
+    else:
+        df["timestamp"] = df["timestamp"].dt.tz_convert('UTC')
+
+    df["age_days"] = (now - df["timestamp"]).dt.days
+    df["recency_weight"] = np.exp(-decay_lambda * df["age_days"])
+
+    df["weighted_reward"] = df["final_reward"] * df["recency_weight"]
+
+    return df
+
+
+# =========================
+# Recency-Aware Subject Score
+# =========================
+def get_subject_success_rate(mpr_subject, decay_lambda=0.01):
+
+    df = load_feedback()
+
+    if df.empty:
+        return 3.0
+
+    df = apply_recency_weighting(df, decay_lambda)
+
+    subject_df = df[df["mpr_subject"] == mpr_subject]
+
+    if subject_df.empty:
+        return 3.0
+
+    weighted_sum = subject_df["weighted_reward"].sum()
+    weight_total = subject_df["recency_weight"].sum()
+
+    return round(weighted_sum / weight_total, 3) if weight_total > 0 else 3.0
+
+
+# =========================
+# Subject Feedback Count
+# =========================
+def get_subject_feedback_count(mpr_subject):
+    df = load_feedback()
+    return len(df[df["mpr_subject"] == mpr_subject])
+
+# =========================
+# Recency Weighted Subject Score
+# =========================
+def get_weighted_subject_score(mpr_subject, decay_lambda=0.01):
+    """
+    Returns recency-weighted average score
+    for a given subject.
+    """
+
+    df = load_feedback()
+
+    if df.empty:
+        return 0
+
+    df = df[df["mpr_subject"] == mpr_subject]
+
+    if df.empty:
+        return 0
+
+    df = apply_recency_weighting(df, decay_lambda)
+
+    weighted_score = df["weighted_reward"].sum()
+    total_weight = df["recency_weight"].sum()
+
+    if total_weight == 0:
+        return 0
+
+    return round(weighted_score / total_weight, 3)
+
+
+
+# =========================
+# Global Feedback Stats
+# =========================
+def get_feedback_stats(decay_lambda=0.01):
 
     df = load_feedback()
 
@@ -98,16 +180,20 @@ def get_feedback_stats():
             "raw_df": df
         }
 
-    global_avg = df["final_reward"].mean()
+    df = apply_recency_weighting(df, decay_lambda)
+
+    weighted_sum = df["weighted_reward"].sum()
+    weight_total = df["recency_weight"].sum()
+
+    global_avg = weighted_sum / weight_total if weight_total > 0 else 0
     reward_std = df["final_reward"].std()
 
     df = df.sort_values("timestamp")
 
-    df["rolling_avg"] = df["final_reward"].rolling(
-        window=min(10, len(df))
-    ).mean()
-
+    window = min(10, len(df))
+    df["rolling_avg"] = df["final_reward"].rolling(window=window).mean()
     df["delta"] = df["rolling_avg"].diff()
+
     learning_velocity = df["delta"].mean()
 
     return {
@@ -119,60 +205,82 @@ def get_feedback_stats():
     }
 
 
-
-
-def get_reward_trend():
-    if not os.path.exists(FEEDBACK_FILE):
-        return pd.DataFrame()
-
-    df = pd.read_csv(FEEDBACK_FILE)
-    df["timestamp"] = pd.to_datetime(df["timestamp"])
-    df = df.sort_values("timestamp")
-
-    window_size = min(10, len(df))
-    df["rolling_avg"] = df["final_reward"].rolling(window=window_size).mean()
-
-
-    return df
-
-def get_weighted_subject_score(subject, min_samples=5):
-    df = load_feedback()
-
-    subject_df = df[df["mpr_subject"] == subject]
-
-    n = len(subject_df)
-    if n == 0:
-        return 3.0  # neutral default
-
-    avg = subject_df["quality_rating"].mean()
-
-    # Bayesian smoothing
-    global_avg = df["quality_rating"].mean()
-    weight = n / (n + min_samples)
-
-    return round(weight * avg + (1 - weight) * global_avg, 2)
-
-def get_low_performing_subjects(threshold=2.0, min_samples=3):
+# =========================
+# Reward Trend
+# =========================
+def get_reward_trend(decay_lambda=0.01):
 
     df = load_feedback()
 
     if df.empty:
-        return []
+        return pd.DataFrame()
 
-    subject_stats = (
-        df.groupby("mpr_subject")
+    df = apply_recency_weighting(df, decay_lambda)
+    df = df.sort_values("timestamp")
+
+    window = min(10, len(df))
+    df["rolling_avg"] = df["weighted_reward"].rolling(window=window).mean()
+
+    return df[["timestamp", "rolling_avg"]]
+
+# =========================
+# Low Performing Subjects (Recency Aware)
+# =========================
+def get_low_performing_subjects(feedback_df, threshold=2.5, min_samples=3):
+    subject_perf = (
+        feedback_df.groupby("mpr_subject")
         .agg(
-            count=("quality_rating", "count"),
-            avg_reward=("final_reward", "mean")
+            avg_reward=("reward","mean"),
+            count=("reward","count")
         )
         .reset_index()
     )
 
-    low_subjects = subject_stats[
-        (subject_stats["count"] >= min_samples) &
-        (subject_stats["avg_reward"] < threshold)
+    low = subject_perf[
+        (subject_perf["avg_reward"] < threshold) &
+        (subject_perf["count"] >= min_samples)
     ]
 
-    return low_subjects["mpr_subject"].tolist()
+    return set(low["mpr_subject"].tolist())
 
+# =================================
+# ==========Calibration curve==================
+# =====================================
+
+def compute_confidence_calibration(feedback_df, bins=5):
+    """
+    Compare predicted similarity vs actual reward.
+    Returns dataframe for calibration curve.
+    """
+    import pandas as pd
+    import numpy as np
+
+    if feedback_df.empty:
+        return pd.DataFrame()
+
+    df = feedback_df.copy()
+
+    # 1. Normalize similarity to 0-1
+    df["similarity_norm"] = df["similarity_score"] / 100
+
+    # 2. Bin predictions
+    df["confidence_bin"] = pd.cut(
+        df["similarity_norm"],
+        bins=bins,
+        labels=False
+    )
+
+    # 3. Perform Aggregation (CRITICAL: Every key must match your CSV columns)
+    # Your CSV uses 'final_reward', NOT 'reward'
+    calibration = (
+        df.groupby("confidence_bin")
+        .agg(
+            avg_predicted=("similarity_norm", "mean"),
+            avg_actual_reward=("final_reward", "mean"),
+            count=("final_reward", "count")
+        )
+        .reset_index()
+    )
+
+    return calibration
 

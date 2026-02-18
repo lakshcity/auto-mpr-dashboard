@@ -35,3 +35,9 @@ timestamp,mpr_subject,similarity_score,quality_rating,relevance_rating,clarity_r
 2026-02-17 08:57:10.727031,Role addition on User,100.0,5,5,5,Yes,Immediate,4.0
 2026-02-17 10:25:19.914193,User deactivate,0.0,5,5,5,Yes,Immediate,4.0
 2026-02-17 10:26:49.694272,Timesheet Allocation - not able to add users for project id 6074,0.0,4,3,4,Yes,Needs Customization,2.95
+2026-02-18 06:38:07.344955,Create new fields in report -,100.0,5,5,5,Yes,Immediate,4.0
+2026-02-18 06:39:43.743534,Report Name : All Production Incident Report need to add layout name in report.,100.0,4,5,5,Yes,Needs Customization,3.65
+2026-02-18 06:42:44.492524,Email Syndication : Billing Milestone status error,0.0,1,2,2,Yes,Not Useful,1.35
+2026-02-18 07:08:45.703826,Unable to view the 100% revenue grid for Project 14092 in MyPortal.,100.0,4,2,4,Yes,Needs Customization,2.7
+2026-02-18 07:10:43.392983,Timesheet Allocation Issues – Product Training Project (ID: 6074),0.0,5,4,5,Yes,Needs Customization,3.7
+2026-02-18 07:10:55.014993,Timesheet Allocation Issues – Product Training Project (ID: 6074),0.0,5,4,5,No,Needs Customization,3.55

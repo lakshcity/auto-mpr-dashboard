@@ -10,9 +10,10 @@ from sentence_transformers import SentenceTransformer
 
 from core.config import PDF_INDEX, PDF_META, EMBED_MODEL, TOP_K
 from services.feedback_manager import (
-    get_subject_success_rate,
+    get_weighted_subject_score,
     get_low_performing_subjects
 )
+
 
 
 
@@ -158,7 +159,7 @@ def _apply_adaptive_scoring(results):
     for r in results:
 
         subject = r.get("mpr_subject", "")
-        success_rate = get_subject_success_rate(subject)
+        success_rate = get_weighted_subject_score(subject)
 
         reward_scaled = success_rate * 20
 
@@ -168,9 +169,9 @@ def _apply_adaptive_scoring(results):
         )
 
         if subject in low_subjects:
-            final_score *= 0.7  # Strong penalty for repeatedly bad subjects
-        elif success_rate < 1.5:
-            final_score *= 0.85
+            final_score *= 0.6  # Strong penalty for repeatedly bad subjects
+        elif success_rate < 2:
+            final_score *= 0.8
 
 
         composite_confidence = (

@@ -123,7 +123,8 @@ from services.feedback_manager import (
     get_subject_feedback_count,
     get_feedback_stats,
     get_low_performing_subjects,
-    get_weighted_subject_score
+    get_weighted_subject_score,
+    compute_confidence_calibration
 )
 Path("data/case_index_master.faiss")
 
@@ -1517,17 +1518,31 @@ if query_mode == "Analytics Dashboard" and role == "admin_analyst":
     
    
     st.markdown("---")
+    from services.feedback_manager import compute_confidence_calibration
     st.markdown("## 🤖 AI Learning Intelligence")
 
-    stats = get_feedback_stats()
-    reward_trend = get_reward_trend()
+    decay_lambda = st.slider(
+    "Recency Decay Strength (λ)",
+    0.001,
+    0.05,
+    0.01,
+    help="Higher values make recent feedback influence model more strongly."
+)
+
+    stats = get_feedback_stats(decay_lambda)
+    reward_trend = get_reward_trend(decay_lambda)
+
+    feedback_df=stats["raw_df"]
+
+    if not feedback_df.empty:
+        calib_df = compute_confidence_calibration(feedback_df)
 
     colA, colB, colC, colD = st.columns(4)
 
-    colA.metric("Total Feedback Entries", stats["total_feedback"])
-    colB.metric("Global Avg Reward", stats["global_avg_reward"])
-    colC.metric("Model Stability (Std Dev)", stats["reward_std"])
-    colD.metric("Learning Velocity", stats["learning_velocity"])
+    colA.metric("Total Feedback Entries", stats["total_feedback"],help="Total number of feedback submissions used to train and evaluate the AI.")
+    colB.metric("Global Avg Reward", stats["global_avg_reward"],help="Mean reward score (1–5) across all feedback entries. Indicates overall AI quality.")
+    colC.metric("Model Stability (Std Dev)", stats["reward_std"],help="Standard deviation of reward scores. Lower = more consistent AI responses.")
+    colD.metric("Learning Velocity", stats["learning_velocity"],help="Average change in rolling reward trend. Positive = improving model performance.")
 
     if not reward_trend.empty:
         reward_chart = alt.Chart(reward_trend).mark_line(point=True).encode(
@@ -1535,6 +1550,30 @@ if query_mode == "Analytics Dashboard" and role == "admin_analyst":
             y="rolling_avg:Q"
         )
         st.altair_chart(reward_chart, use_container_width=True)
+
+    # Calibration curve
+
+    calib_df = compute_confidence_calibration(feedback_df)
+
+    if not calib_df.empty:
+        st.markdown("### 📉 Confidence Calibration Curve")
+
+        line = alt.Chart(calib_df).mark_line(point=True).encode(
+            x="avg_predicted:Q",
+            y="avg_actual_reward:Q"
+        )
+
+        ideal_line = alt.Chart(
+            pd.DataFrame({
+                "x": [0,1],
+                "y": [0,5]
+            })
+        ).mark_line(strokeDash=[5,5]).encode(
+            x="x:Q",
+            y="y:Q"
+        )
+
+        st.altair_chart(line + ideal_line, use_container_width=True)
 
     # Subject Reliability Leaderboard
     st.markdown("### 🏆 Subject Reliability Leaderboard")
@@ -1563,29 +1602,98 @@ if query_mode == "Analytics Dashboard" and role == "admin_analyst":
 
 
     # =========================
-    # Risk Alerts
+    # Risk Intelligence Engine
     # =========================
-
     st.markdown("---")
     st.markdown("## ⚠ Risk Intelligence Engine")
 
     risk_score = 0
+    risk_messages = []
 
+    # --- Operational Risk (SLA)
     if sla_metrics["critical_active"] > 0:
-        st.error(f"{sla_metrics['critical_active']} cases in CRITICAL SLA band (≥14 BD).")
         risk_score += 2
+        risk_messages.append(
+            f"{sla_metrics['critical_active']} cases in CRITICAL SLA band (≥14 BD). Immediate escalation required."
+        )
 
     if sla_metrics["near_breach"] > 15:
-        st.warning("High Near-Breach Volume Detected.")
         risk_score += 1
+        risk_messages.append("High volume of Near-Breach SLA cases detected.")
 
+    # --- AI Stability Risk
     if stats["reward_std"] > 1.5:
-        st.warning("AI Reward Variance High → Model unstable.")
         risk_score += 1
+        risk_messages.append("AI reward volatility high (Model Stability elevated).")
 
+    # --- Learning Risk
     if stats["learning_velocity"] < 0:
-        st.warning("Model Performance Declining.")
         risk_score += 1
+        risk_messages.append("Learning velocity negative — AI performance degrading.")
 
-    st.metric("Composite Risk Score", risk_score)
+    # --------------------------
+    # Display Risk Messages
+    # --------------------------
+    if risk_messages:
+        for msg in risk_messages:
+            st.error(msg)
+    else:
+        st.success("System operating within normal risk thresholds.")
+
+    # --------------------------
+    # Composite Risk Score
+    # --------------------------
+
+    # Normalize to 0–100 scale (each risk point = 25)
+    risk_index = min(100, risk_score * 25)
+
+    colR1, colR2 = st.columns(2)
+
+    colR1.metric(
+        "Composite Risk Score",
+        risk_score,
+        help="""
+    Aggregated operational + AI health score.
+
+    Scoring Logic:
+    • +2 → Critical SLA cases present
+    • +1 → Near-Breach spike
+    • +1 → High AI reward volatility
+    • +1 → Negative learning velocity
+
+    Interpretation:
+    0 = Healthy
+    1 = Mild Concern
+    2–3 = Elevated Risk
+    4+ = High Risk
+    """
+    )
+
+    colR2.metric(
+        "System Health Index (0–100)",
+        100 - risk_index,
+        help="""
+    Normalized health score.
+    Higher = healthier system.
+
+    100 = No operational or AI risk detected.
+    Lower score indicates increasing operational or AI instability.
+    """
+    )
+
+    # --------------------------
+    # Visual Risk Gauge
+    # --------------------------
+    risk_df = pd.DataFrame({
+        "Metric": ["Risk Index"],
+        "Score": [risk_index]
+    })
+
+    gauge_chart = alt.Chart(risk_df).mark_bar().encode(
+        x=alt.X("Score:Q", scale=alt.Scale(domain=[0, 100])),
+        y=alt.value(20)
+    )
+
+    st.altair_chart(gauge_chart, use_container_width=True)
+
 
