@@ -226,12 +226,24 @@ def get_reward_trend(decay_lambda=0.01):
 # =========================
 # Low Performing Subjects (Recency Aware)
 # =========================
-def get_low_performing_subjects(feedback_df, threshold=2.5, min_samples=3):
+def get_low_performing_subjects(feedback_df=None, threshold=2.5, min_samples=3):
+    """
+    Returns subjects whose average reward falls below threshold.
+    Auto-loads data if feedback_df is not provided.
+    """
+    
+    # FIX: Auto-load if called from retriever without arguments
+    if feedback_df is None:
+        feedback_df = load_feedback()
+
+    if feedback_df.empty:
+        return set()
+
     subject_perf = (
         feedback_df.groupby("mpr_subject")
         .agg(
-            avg_reward=("reward","mean"),
-            count=("reward","count")
+            avg_reward=("final_reward", "mean"), # Ensure using 'final_reward'
+            count=("final_reward", "count")
         )
         .reset_index()
     )
@@ -283,4 +295,31 @@ def compute_confidence_calibration(feedback_df, bins=5):
     )
 
     return calibration
+
+def check_retrain_trigger(
+    min_feedback=50,
+    stability_threshold=1.2
+):
+    """
+    Determines whether model retraining is recommended.
+    """
+
+    stats = get_feedback_stats()
+
+    total_feedback = stats.get("total_feedback", 0)
+    model_stability = stats.get("model_stability", 0)
+
+    trigger = (
+        total_feedback >= min_feedback and
+        model_stability >= stability_threshold
+    )
+
+    return {
+        "trigger": trigger,
+        "total_feedback": total_feedback,
+        "model_stability": model_stability,
+        "min_required": min_feedback,
+        "stability_threshold": stability_threshold
+    }
+
 

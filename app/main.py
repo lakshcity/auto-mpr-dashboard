@@ -124,7 +124,8 @@ from services.feedback_manager import (
     get_feedback_stats,
     get_low_performing_subjects,
     get_weighted_subject_score,
-    compute_confidence_calibration
+    compute_confidence_calibration,
+    check_retrain_trigger
 )
 Path("data/case_index_master.faiss")
 
@@ -1695,5 +1696,30 @@ if query_mode == "Analytics Dashboard" and role == "admin_analyst":
     )
 
     st.altair_chart(gauge_chart, use_container_width=True)
+
+    # ===== Retrain Intelligence ====================
+
+    st.markdown("### 🔄 Retraining Intelligence")
+
+    retrain_info = check_retrain_trigger()
+
+    if retrain_info["trigger"]:
+        st.error(
+            "Retraining recommended: "
+            f"{retrain_info['total_feedback']} feedback logs accumulated "
+            f"and model stability {round(retrain_info['model_stability'],2)} exceeds threshold."
+        )
+
+        if st.button("Rebuild Vector Index"):
+            from services.indexer_pdf import build_pdf_index
+            build_pdf_index()
+            st.success("Vector index rebuilt successfully.")
+    else:
+        st.success(
+            f"No retraining needed. "
+            f"Feedback: {retrain_info['total_feedback']} | "
+            f"Stability: {round(retrain_info['model_stability'],2)}"
+        )
+
 
 

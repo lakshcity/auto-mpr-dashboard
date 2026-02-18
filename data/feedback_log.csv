@@ -41,3 +41,11 @@ timestamp,mpr_subject,similarity_score,quality_rating,relevance_rating,clarity_r
 2026-02-18 07:08:45.703826,Unable to view the 100% revenue grid for Project 14092 in MyPortal.,100.0,4,2,4,Yes,Needs Customization,2.7
 2026-02-18 07:10:43.392983,Timesheet Allocation Issues – Product Training Project (ID: 6074),0.0,5,4,5,Yes,Needs Customization,3.7
 2026-02-18 07:10:55.014993,Timesheet Allocation Issues – Product Training Project (ID: 6074),0.0,5,4,5,No,Needs Customization,3.55
+2026-02-18 10:20:18.573631,Reset password for the user,100.0,1,1,1,No,Not Useful,0.75
+2026-02-18 10:21:52.554471,User Creation - Kakarlapudi Raghu Kumar Raju,0.0,4,4,5,Yes,Immediate,3.45
+2026-02-18 11:19:08.080819,Resource time allocation update on an old project and new allocation update,100.0,5,5,5,Yes,Immediate,4.0
+2026-02-18 11:20:29.260415,My businessnext Password reset for client login ID,100.0,4,4,4,Yes,Needs Customization,3.2
+2026-02-18 11:21:39.985521,User Creation,80.0,5,5,5,Yes,Immediate,4.0
+2026-02-18 11:22:43.678151,Resource is not able to see project in timesheet.,100.0,4,4,4,Yes,Immediate,3.25
+2026-02-18 11:24:03.503591,User Creation,80.0,4,1,1,No,Not Useful,1.65
+2026-02-18 11:25:15.061490,Request to Add Project Manager Role to My Account,100.0,2,2,2,No,Not Useful,1.5
