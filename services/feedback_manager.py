@@ -77,22 +77,48 @@ def get_subject_feedback_count(mpr_subject):
     df = pd.read_csv(FEEDBACK_FILE)
     return len(df[df["mpr_subject"] == mpr_subject])
 
-
-def get_feedback_stats():
+def load_feedback():
     if not os.path.exists(FEEDBACK_FILE):
-        return {}
+        return pd.DataFrame(columns=REQUIRED_COLUMNS)
 
     df = pd.read_csv(FEEDBACK_FILE)
+    df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+    return df
+
+def get_feedback_stats():
+
+    df = load_feedback()
+
+    if df.empty:
+        return {
+            "total_feedback": 0,
+            "global_avg_reward": 0,
+            "reward_std": 0,
+            "learning_velocity": 0,
+            "raw_df": df
+        }
+
+    global_avg = df["final_reward"].mean()
+    reward_std = df["final_reward"].std()
+
+    df = df.sort_values("timestamp")
+
+    df["rolling_avg"] = df["final_reward"].rolling(
+        window=min(10, len(df))
+    ).mean()
+
+    df["delta"] = df["rolling_avg"].diff()
+    learning_velocity = df["delta"].mean()
 
     return {
         "total_feedback": len(df),
-        "avg_reward": round(df["final_reward"].mean(), 3),
-        "best_subjects": df.groupby("mpr_subject")["final_reward"]
-                           .mean()
-                           .sort_values(ascending=False)
-                           .head(5)
-                           .to_dict()
+        "global_avg_reward": round(global_avg, 3),
+        "reward_std": round(reward_std, 3),
+        "learning_velocity": round(learning_velocity, 4),
+        "raw_df": df
     }
+
+
 
 
 def get_reward_trend():
@@ -108,3 +134,45 @@ def get_reward_trend():
 
 
     return df
+
+def get_weighted_subject_score(subject, min_samples=5):
+    df = load_feedback()
+
+    subject_df = df[df["mpr_subject"] == subject]
+
+    n = len(subject_df)
+    if n == 0:
+        return 3.0  # neutral default
+
+    avg = subject_df["quality_rating"].mean()
+
+    # Bayesian smoothing
+    global_avg = df["quality_rating"].mean()
+    weight = n / (n + min_samples)
+
+    return round(weight * avg + (1 - weight) * global_avg, 2)
+
+def get_low_performing_subjects(threshold=2.0, min_samples=3):
+
+    df = load_feedback()
+
+    if df.empty:
+        return []
+
+    subject_stats = (
+        df.groupby("mpr_subject")
+        .agg(
+            count=("quality_rating", "count"),
+            avg_reward=("final_reward", "mean")
+        )
+        .reset_index()
+    )
+
+    low_subjects = subject_stats[
+        (subject_stats["count"] >= min_samples) &
+        (subject_stats["avg_reward"] < threshold)
+    ]
+
+    return low_subjects["mpr_subject"].tolist()
+
+

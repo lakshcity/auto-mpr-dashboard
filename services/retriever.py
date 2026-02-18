@@ -9,7 +9,11 @@ from pathlib import Path
 from sentence_transformers import SentenceTransformer
 
 from core.config import PDF_INDEX, PDF_META, EMBED_MODEL, TOP_K
-from services.feedback_manager import get_subject_success_rate
+from services.feedback_manager import (
+    get_subject_success_rate,
+    get_low_performing_subjects
+)
+
 
 
 # =====================================================
@@ -147,6 +151,8 @@ def search_redash_mpr(query, top_k=5):
 
 def _apply_adaptive_scoring(results):
 
+    low_subjects = get_low_performing_subjects()
+
     enhanced = []
 
     for r in results:
@@ -161,8 +167,11 @@ def _apply_adaptive_scoring(results):
             0.3 * reward_scaled
         )
 
-        if success_rate < 1.5:
-            final_score *= 0.8
+        if subject in low_subjects:
+            final_score *= 0.7  # Strong penalty for repeatedly bad subjects
+        elif success_rate < 1.5:
+            final_score *= 0.85
+
 
         composite_confidence = (
             0.6 * r.get("confidence", 0) +

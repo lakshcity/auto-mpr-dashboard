@@ -120,7 +120,10 @@ from services.feedback_manager import (
     save_feedback,
     get_subject_success_rate,
     get_reward_trend,
-    get_subject_feedback_count
+    get_subject_feedback_count,
+    get_feedback_stats,
+    get_low_performing_subjects,
+    get_weighted_subject_score
 )
 Path("data/case_index_master.faiss")
 
@@ -1334,75 +1337,81 @@ if False and st.session_state.user_summary:
 # =========================
 if query_mode == "Analytics Dashboard" and role == "admin_analyst":
 
-    st.markdown("## 📊 Admin Analytics Dashboard")
+    from services.user_insights import add_business_ageing, compute_sla_metrics_bd
+    from services.feedback_manager import get_reward_trend, get_feedback_stats
 
-    # Load full dataset (reuse your metadata logic)
+    st.markdown("## 📊 Admin Analytics Control Tower")
+
     try:
         full_df = pd.DataFrame(metadata)
     except:
-        st.error("Metadata not available for analytics.")
+        st.error("Metadata not available.")
         st.stop()
 
     if full_df.empty:
         st.warning("No data available.")
         st.stop()
 
-    # Basic cleanup
+    # -------------------------
+    # Normalize + Business-Day Ageing
+    # -------------------------
     full_df["reportedon"] = pd.to_datetime(full_df.get("reportedon"), errors="coerce")
     full_df["closeddate"] = pd.to_datetime(full_df.get("closeddate"), errors="coerce")
+    full_df = add_business_ageing(full_df)
 
     total_cases = len(full_df)
-    active_cases = full_df["closeddate"].isna().sum()
-    closed_cases = full_df["closeddate"].notna().sum()
+    active_cases = full_df["is_open"].sum()
+    closed_cases = total_cases - active_cases
 
-    col1, col2, col3 = st.columns(3)
+    # -------------------------
+    # SLA Metrics (BD Based)
+    # -------------------------
+    sla_metrics = compute_sla_metrics_bd(full_df)
+
+    col1, col2, col3, col4 = st.columns(4)
     col1.metric("Total Cases", total_cases)
     col2.metric("Active Cases", active_cases)
     col3.metric("Closed Cases", closed_cases)
+    col4.metric("SLA Compliance (%)", sla_metrics["sla_compliance"])
 
-    # Resolution rate
-    resolution_rate = round((closed_cases / total_cases) * 100, 2) if total_cases > 0 else 0
-    st.metric("Overall Resolution Rate (%)", resolution_rate)
+    col5, col6 = st.columns(2)
+    col5.metric("Avg Resolution (BD)", sla_metrics["avg_resolution"])
+    col6.metric("Awaiting Input (>2BD)", sla_metrics["awaiting_input"])
 
     st.markdown("---")
 
-    # 🔹 User Performance
-    if "owner" in full_df.columns:
+    # =========================
+    # SLA Distribution (BD-Based)
+    # =========================
+    st.markdown("### 🚦 SLA Health (Business-Day Based)")
 
-        st.markdown("### 👥 User Performance")
+    sla_dist_df = pd.DataFrame({
+        "Category": [
+            "Active <7BD",
+            "Near Breach (5–7BD)",
+            "Overdue Active (7–14BD)",
+            "Critical Active (≥14BD)",
+            "Total Breached (>7BD)"
+        ],
+        "Count": [
+            sla_metrics["active_in_sla"],
+            sla_metrics["near_breach"],
+            sla_metrics["overdue_active"],
+            sla_metrics["critical_active"],
+            sla_metrics["sla_breached"]
+        ]
+    })
 
-        user_perf = (
-            full_df.groupby("owner")
-            .agg(
-                total=("owner", "count"),
-                closed=("closeddate", lambda x: x.notna().sum())
-            )
-        )
-
-        user_perf["resolution_rate"] = (
-            user_perf["closed"] / user_perf["total"] * 100
-        ).round(2)
-
-        user_perf = user_perf.sort_values("resolution_rate", ascending=False)
-
-        st.dataframe(user_perf.head(10), use_container_width=True)
-
-    #===================KPI Row=======================
-
-    avg_resolution = (
-        (full_df["closeddate"] - full_df["reportedon"]).dt.days.mean()
-        if closed_cases > 0 else 0
+    sla_chart = alt.Chart(sla_dist_df).mark_bar().encode(
+        x="Category",
+        y="Count"
     )
+    st.altair_chart(sla_chart, use_container_width=True)
 
-    sla_compliance = round((closed_cases / total_cases) * 100, 2) if total_cases > 0 else 0
-
-    col4, col5 = st.columns(2)
-    col4.metric("Avg Resolution Time (Days)", round(avg_resolution, 2))
-    col5.metric("SLA Compliance (%)", sla_compliance)
-
-    #==================Case Trend Over Time (Line Chart)=================
-
-    st.markdown("### 📈 Case Trend Over Time")
+    # =========================
+    # Case Inflow Trend
+    # =========================
+    st.markdown("### 📈 Case Inflow Trend")
 
     trend_df = (
         full_df
@@ -1415,45 +1424,35 @@ if query_mode == "Analytics Dashboard" and role == "admin_analyst":
         x="reportedon:T",
         y="cases:Q"
     )
-
     st.altair_chart(trend_chart, use_container_width=True)
 
-    #===================SLA Distribution chart=======================
+    # =========================
+    # Resolution Time Distribution (BD)
+    # =========================
+    st.markdown("### ⏱ Resolution Time Distribution (Closed Cases - BD)")
 
-    st.markdown("### 🚦 SLA Distribution")
+    closed_df = full_df[~full_df["is_open"]]
 
-    full_df["ageing"] = (
-        (pd.Timestamp.now() - full_df["reportedon"]).dt.days
-    )
+    if not closed_df.empty:
+        hist = alt.Chart(closed_df).mark_bar().encode(
+            alt.X("ageing_bd:Q", bin=True),
+            y="count()"
+        )
+        st.altair_chart(hist, use_container_width=True)
+    else:
+        st.info("No closed cases available.")
 
-    sla_bins = {
-        "In SLA (<7d)": (full_df["ageing"] < 7).sum(),
-        "Near Breach (5–7d)": ((full_df["ageing"] >= 5) & (full_df["ageing"] < 7)).sum(),
-        "Breached (>7d)": (full_df["ageing"] >= 7).sum()
-    }
+    # =========================
+    # User Performance (Resolution Rate)
+    # =========================
+    if "currentowner" in full_df.columns:
 
-    sla_dist_df = pd.DataFrame({
-        "Category": list(sla_bins.keys()),
-        "Count": list(sla_bins.values())
-    })
-
-    sla_chart = alt.Chart(sla_dist_df).mark_bar().encode(
-        x="Category",
-        y="Count"
-    )
-
-    st.altair_chart(sla_chart, use_container_width=True)
-
-    #=================TOP 10 Users by Resolution Rate=========================
-
-    if "owner" in full_df.columns:
-
-        st.markdown("### 👥 Top 10 Performers")
+        st.markdown("### 👥 Top 10 Performers (Resolution %)")
 
         user_perf = (
-            full_df.groupby("owner")
+            full_df.groupby("currentowner")
             .agg(
-                total=("owner", "count"),
+                total=("currentowner", "count"),
                 closed=("closeddate", lambda x: x.notna().sum())
             )
         )
@@ -1466,25 +1465,127 @@ if query_mode == "Analytics Dashboard" and role == "admin_analyst":
 
         chart = alt.Chart(user_perf.reset_index()).mark_bar().encode(
             x="resolution_rate:Q",
-            y="owner:N"
+            y="currentowner:N"
+        )
+        st.altair_chart(chart, use_container_width=True)
+
+    # =========================
+    # Status Distribution
+    # =========================
+    st.markdown("### 🧩 Status Distribution")
+
+    status_df = (
+        full_df["statuscode"]
+        .astype(str)
+        .value_counts()
+        .reset_index()
+    )
+    status_df.columns = ["Status", "Count"]
+
+    pie = alt.Chart(status_df).mark_arc().encode(
+        theta="Count",
+        color="Status"
+    )
+    st.altair_chart(pie, use_container_width=True)
+
+    # =========================
+    # Subject Intelligence
+    # =========================
+    if "mpr_subject" in full_df.columns:
+        st.markdown("### 📚 Top 10 Recurring Subjects")
+
+        subject_df = (
+            full_df["mpr_subject"]
+            .astype(str)
+            .value_counts()
+            .head(10)
+            .reset_index()
+        )
+        subject_df.columns = ["Subject", "Count"]
+
+        subject_chart = alt.Chart(subject_df).mark_bar().encode(
+            x="Count:Q",
+            y="Subject:N"
+        )
+        st.altair_chart(subject_chart, use_container_width=True)
+
+    
+
+    # =========================
+    # AI Learning Intelligence
+    # =========================
+    
+   
+    st.markdown("---")
+    st.markdown("## 🤖 AI Learning Intelligence")
+
+    stats = get_feedback_stats()
+    reward_trend = get_reward_trend()
+
+    colA, colB, colC, colD = st.columns(4)
+
+    colA.metric("Total Feedback Entries", stats["total_feedback"])
+    colB.metric("Global Avg Reward", stats["global_avg_reward"])
+    colC.metric("Model Stability (Std Dev)", stats["reward_std"])
+    colD.metric("Learning Velocity", stats["learning_velocity"])
+
+    if not reward_trend.empty:
+        reward_chart = alt.Chart(reward_trend).mark_line(point=True).encode(
+            x="timestamp:T",
+            y="rolling_avg:Q"
+        )
+        st.altair_chart(reward_chart, use_container_width=True)
+
+    # Subject Reliability Leaderboard
+    st.markdown("### 🏆 Subject Reliability Leaderboard")
+
+    feedback_df = stats["raw_df"]
+
+    if not feedback_df.empty:
+        subject_stats = (
+            feedback_df.groupby("mpr_subject")
+            .agg(
+                count=("quality_rating", "count"),
+                avg_reward=("final_reward", "mean")
+            )
+            .reset_index()
+        )
+
+        subject_stats = subject_stats[subject_stats["count"] >= 3]
+        subject_stats = subject_stats.sort_values("avg_reward", ascending=False).head(10)
+
+        chart = alt.Chart(subject_stats).mark_bar().encode(
+            x="avg_reward:Q",
+            y="mpr_subject:N"
         )
 
         st.altair_chart(chart, use_container_width=True)
 
-        #=========Feedback Intelligence System===============================
 
+    # =========================
+    # Risk Alerts
+    # =========================
 
+    st.markdown("---")
+    st.markdown("## ⚠ Risk Intelligence Engine")
 
-        st.markdown("### 🤖 AI Learning Trend")
+    risk_score = 0
 
-        trend_df = get_reward_trend()
+    if sla_metrics["critical_active"] > 0:
+        st.error(f"{sla_metrics['critical_active']} cases in CRITICAL SLA band (≥14 BD).")
+        risk_score += 2
 
-        if not trend_df.empty:
-            reward_chart = alt.Chart(trend_df).mark_line().encode(
-                x="timestamp:T",
-                y="rolling_avg:Q"
-            )
-            st.altair_chart(reward_chart, use_container_width=True)
-        else:
-            st.info("Feedback trend will appear after more submissions.")
+    if sla_metrics["near_breach"] > 15:
+        st.warning("High Near-Breach Volume Detected.")
+        risk_score += 1
+
+    if stats["reward_std"] > 1.5:
+        st.warning("AI Reward Variance High → Model unstable.")
+        risk_score += 1
+
+    if stats["learning_velocity"] < 0:
+        st.warning("Model Performance Declining.")
+        risk_score += 1
+
+    st.metric("Composite Risk Score", risk_score)
 
