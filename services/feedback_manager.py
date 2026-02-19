@@ -307,7 +307,7 @@ def check_retrain_trigger(
     stats = get_feedback_stats()
 
     total_feedback = stats.get("total_feedback", 0)
-    model_stability = stats.get("model_stability", 0)
+    model_stability = stats.get("reward_std", 0)
 
     trigger = (
         total_feedback >= min_feedback and

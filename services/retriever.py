@@ -11,7 +11,8 @@ from sentence_transformers import SentenceTransformer
 from core.config import PDF_INDEX, PDF_META, EMBED_MODEL, TOP_K
 from services.feedback_manager import (
     get_weighted_subject_score,
-    get_low_performing_subjects
+    get_low_performing_subjects,
+    get_feedback_stats
 )
 
 
@@ -147,37 +148,44 @@ def search_redash_mpr(query, top_k=5):
         row["confidence"] = confidence
         results.append(row)
 
-    return _apply_adaptive_scoring(results)
+    enhanced = _apply_adaptive_scoring(results)
+    enhanced = apply_confidence_threshold(enhanced)
+    return enhanced
 
 
 def _apply_adaptive_scoring(results):
 
     low_subjects = get_low_performing_subjects()
-
     enhanced = []
+    import numpy as np # Import at the top of the function for cleanliness
 
     for r in results:
 
         subject = r.get("mpr_subject", "")
         success_rate = get_weighted_subject_score(subject)
-
         reward_scaled = success_rate * 20
 
+        # Calculate base scores FIRST
         final_score = (
             0.7 * r.get("confidence", 0) +
             0.3 * reward_scaled
         )
 
-        if subject in low_subjects:
-            final_score *= 0.6  # Strong penalty for repeatedly bad subjects
-        elif success_rate < 2:
-            final_score *= 0.8
-
-
-        composite_confidence = (
+        raw_conf = (
             0.6 * r.get("confidence", 0) +
             0.4 * reward_scaled
         )
+
+        # Calculate composite_confidence FIRST
+        # Smooth extreme spikes
+        composite_confidence = 100 * np.tanh(raw_conf / 100)
+
+        # Apply penalties AFTER base calculation
+        if subject in low_subjects:
+            final_score *= 0.4
+            composite_confidence *= 0.5
+        elif success_rate < 2:
+            final_score *= 0.75
 
         r["adaptive_score"] = round(final_score, 2)
         r["composite_confidence"] = round(composite_confidence, 2)
@@ -185,6 +193,31 @@ def _apply_adaptive_scoring(results):
         enhanced.append(r)
 
     return enhanced
+
+
+def apply_confidence_threshold(results, base_threshold=30):
+    """
+    Dynamically filter low-confidence results.
+    Threshold increases if model stability is poor.
+    """
+    stats = get_feedback_stats()
+    model_std = stats.get("reward_std", 0)
+
+    # If unstable model, be stricter
+    dynamic_threshold = base_threshold
+
+    if model_std > 1.5:
+        dynamic_threshold += 10
+    elif model_std > 1.0:
+        dynamic_threshold += 5
+
+    filtered = [
+        r for r in results
+        if r.get("composite_confidence", 0) >= dynamic_threshold
+    ]
+
+    return filtered
+
 
 
 # =====================================================
